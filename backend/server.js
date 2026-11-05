@@ -1,3 +1,4 @@
+const { setupDatabase } = require('./scripts/setupDb');
 const express = require('express');
 const app = express();
 const cors = require('cors');
@@ -11,6 +12,13 @@ app.use(express.json());
 // const roomRoutes = require('./routes/roomRoutes');
 // app.use('/api/v1/rooms', roomRoutes);
 
-app.listen(port, () => {
-    console.log(`Backend Server đang chạy tại http://localhost:${port}`);
-});
+setupDatabase()
+    .then(() => {
+        app.listen(port, () => {
+            console.log(`Backend Server đang chạy tại http://localhost:${port}`);
+        });
+    })
+    .catch((err) => {
+        console.error('Không thể chuẩn bị database:', err.message);
+        process.exit(1);
+    });
