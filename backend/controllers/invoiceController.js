@@ -1,6 +1,7 @@
 const InvoiceModel = require('../models/invoiceModel');
 const BookingModel = require('../models/bookingModel');
 const ServiceUsageModel = require('../models/serviceUsageModel');
+const PromotionModel = require('../models/promotionModel');
 const pricing = require('../utils/pricing');
 const rules = require('../utils/bookingRules');
 const { calcInvoice } = require('../utils/invoiceCalc');
@@ -50,7 +51,9 @@ const loadContext = async (bookingId) => {
   const serviceItems = await ServiceUsageModel.listByBooking(booking.BookingID);
   const serviceTotal = pricing.round2(serviceItems.reduce((s, i) => s + Number(i.SubTotal), 0));
   const settings = await rules.readSettings();
-  return { booking, roomInfos, serviceItems, serviceTotal, settings };
+  // Mã khuyến mãi của đơn (nếu có)
+  const promotion = booking.PromoID ? await PromotionModel.getById(booking.PromoID) : null;
+  return { booking, roomInfos, serviceItems, serviceTotal, settings, promotion };
 };
 
 // Chi tiết một hóa đơn
@@ -60,7 +63,7 @@ const buildInvoiceDetail = async (invoice) => {
   return { ...invoice, Rooms: booking.Rooms, Services: services };
 };
 
-// GET /api/v1/invoices/preview?bookingId=1   (Lễ tân/Admin)
+// GET /api/v1/invoices/preview?bookingId=1
 exports.previewInvoice = async (req, res) => {
   try {
     const { bookingId } = req.query;
@@ -75,6 +78,7 @@ exports.previewInvoice = async (req, res) => {
       settings: ctx.settings,
       now,
       serviceTotal: ctx.serviceTotal,
+      promotion: ctx.promotion,
     });
     return res.json({
       success: true,
@@ -88,6 +92,8 @@ exports.previewInvoice = async (req, res) => {
         RoomTotal: calc.roomTotal,
         TimeSurchargeTotal: calc.timeSurchargeTotal,
         ServiceTotal: calc.serviceTotal,
+        PromoCode: ctx.promotion ? ctx.promotion.PromoCode : null,
+        DiscountAmount: calc.discountAmount,
         TotalAmount: calc.totalAmount,
         DepositDeducted: calc.depositDeducted,
         AmountDue: calc.amountDue,
@@ -99,7 +105,7 @@ exports.previewInvoice = async (req, res) => {
   }
 };
 
-// POST /api/v1/invoices   (Lễ tân/Admin)
+// POST /api/v1/invoices
 exports.createInvoice = async (req, res) => {
   try {
     const body = req.body || {};
@@ -132,8 +138,8 @@ exports.createInvoice = async (req, res) => {
       settings: ctx.settings,
       now,
       serviceTotal: ctx.serviceTotal,
+      promotion: ctx.promotion,
     });
-
     if (calc.amountDue > 0 && !paymentMethod) {
       return fail(res, 400, 'Cần chọn phương thức thanh toán');
     }
@@ -150,6 +156,7 @@ exports.createInvoice = async (req, res) => {
         RoomTotal: calc.roomTotal,
         TimeSurchargeTotal: calc.timeSurchargeTotal,
         ServiceTotal: calc.serviceTotal,
+        DiscountAmount: calc.discountAmount,
         DepositDeducted: calc.depositDeducted,
         TotalAmount: calc.totalAmount,
         AmountDue: calc.amountDue,

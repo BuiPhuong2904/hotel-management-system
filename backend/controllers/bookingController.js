@@ -2,6 +2,8 @@ const BookingModel = require('../models/bookingModel');
 const SettingModel = require('../models/settingModel');
 const UserModel = require('../models/userModel');
 const pricing = require('../utils/pricing');
+const { resolvePromoCode } = require('../utils/promotion');
+const { nowString } = require('../utils/bookingRules');
 
 const MAX_NIGHTS = 30;
 const MAX_ROOMS_PER_BOOKING = 10;
@@ -26,7 +28,6 @@ const optional = (value) => {
   const text = String(value ?? '').trim();
   return text === '' ? null : text;
 };
-
 
 const parseDate = (value) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -70,7 +71,7 @@ const readSettings = async () => {
 const canAccess = (user, booking) =>
   user.role === 'Admin' || user.role === 'Staff' || booking.UserID === user.id;
 
-
+// POST /api/v1/bookings/online
 exports.createOnlineBooking = async (req, res) => {
   try {
     const body = req.body || {};
@@ -172,7 +173,7 @@ exports.createOnlineBooking = async (req, res) => {
     if (deposit > estimatedTotal) {
       return fail(res, 400, 'Tiền cọc không được lớn hơn tổng tiền dự kiến');
     }
-
+    // Đã cọc đủ thì giữ phòng
     const status = deposit > 0 ? 'Confirmed' : 'Pending';
 
     // ---- Thông tin người đặt ----
@@ -187,6 +188,11 @@ exports.createOnlineBooking = async (req, res) => {
     if (guestName.length > 100) return fail(res, 400, 'Tên người đặt tối đa 100 ký tự');
     if (note && note.length > 255) return fail(res, 400, 'Ghi chú tối đa 255 ký tự');
 
+    // ---- Mã khuyến mãi ----
+    const promoResult = await resolvePromoCode(body.PromoCode, nowString());
+    if (promoResult.error) return fail(res, 400, promoResult.error);
+    const promo = promoResult.promo;
+
     // ---- Ghi vào database ----
     const bookingId = await BookingModel.createWithDetails({
       booking: {
@@ -199,6 +205,7 @@ exports.createOnlineBooking = async (req, res) => {
         ExpectedCheckOut: `${checkOutDate} ${settings.checkOutTime}`,
         Status: status,
         Deposit: deposit,
+        PromoID: promo ? promo.PromoID : null,
         Note: note,
       },
       details,
@@ -211,7 +218,13 @@ exports.createOnlineBooking = async (req, res) => {
         status === 'Confirmed'
           ? 'Đặt phòng thành công, phòng đã được giữ'
           : `Đặt phòng thành công, đang chờ đặt cọc tối thiểu ${minDeposit} để giữ phòng`,
-      data: { ...booking, MinDeposit: minDeposit, EstimatedTotal: estimatedTotal },
+      data: {
+        ...booking,
+        MinDeposit: minDeposit,
+        EstimatedTotal: estimatedTotal,
+        PromoCode: promo ? promo.PromoCode : null,
+        EstimatedDiscount: pricing.calcDiscount(promo, estimatedTotal),
+      },
     });
   } catch (err) {
     return handleError(res, err);
@@ -233,7 +246,6 @@ exports.getBookingById = async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return fail(res, 400, 'Mã đơn không hợp lệ');
     const booking = await BookingModel.getById(req.params.id);
-
     if (!booking || !canAccess(req.user, booking)) {
       return fail(res, 404, 'Không tìm thấy đơn đặt phòng');
     }
@@ -258,7 +270,7 @@ exports.cancelBooking = async (req, res) => {
         `Chỉ hủy được đơn đang chờ cọc hoặc đã cọc (đơn đang ở trạng thái ${booking.Status})`
       );
     }
-
+    // Khách không tự hủy khi đã quá giờ nhận phòng
     if (req.user.role === 'Customer' && new Date(booking.ExpectedCheckIn) <= new Date()) {
       return fail(res, 409, 'Đã quá giờ nhận phòng, vui lòng liên hệ khách sạn để hủy đơn');
     }

@@ -1,7 +1,7 @@
 const BookingModel = require('../models/bookingModel');
 const pricing = require('../utils/pricing');
 const rules = require('../utils/bookingRules');
-
+const { resolvePromoCode } = require('../utils/promotion');
 const MAX_NIGHTS = 30;
 const MAX_ROOMS_PER_BOOKING = 10;
 
@@ -40,6 +40,7 @@ const handleError = (res, err) => {
 const parseMoney = (raw) =>
   raw === undefined || raw === null || raw === '' ? 0 : Number(raw);
 
+// POST /api/v1/bookings/direct
 exports.createDirectBooking = async (req, res) => {
   try {
     const body = req.body || {};
@@ -127,6 +128,10 @@ exports.createDirectBooking = async (req, res) => {
       return fail(res, 400, 'Tiền cọc không được lớn hơn tổng tiền dự kiến');
     }
 
+    const promoResult = await resolvePromoCode(body.PromoCode, now);
+    if (promoResult.error) return fail(res, 400, promoResult.error);
+    const promo = promoResult.promo;
+
     const bookingId = await BookingModel.createDirect({
       booking: {
         UserID: null,
@@ -138,6 +143,7 @@ exports.createDirectBooking = async (req, res) => {
         ExpectedCheckOut: `${checkOutDate} ${settings.checkOutTime}`,
         Status: 'CheckedIn',
         Deposit: deposit,
+        PromoID: promo ? promo.PromoID : null,
         Note: note,
       },
       details,
@@ -147,14 +153,19 @@ exports.createDirectBooking = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'Đã lập phiếu thuê và nhận phòng',
-      data: { ...booking, EstimatedTotal: estimatedTotal },
+      data: {
+        ...booking,
+        EstimatedTotal: estimatedTotal,
+        PromoCode: promo ? promo.PromoCode : null,
+        EstimatedDiscount: pricing.calcDiscount(promo, estimatedTotal),
+      },
     });
   } catch (err) {
     return handleError(res, err);
   }
 };
 
-// PATCH /api/v1/bookings/:id/confirm-deposit   body: { Deposit }
+// PATCH /api/v1/bookings/:id/confirm-deposit
 exports.confirmDeposit = async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return fail(res, 400, 'Mã đơn không hợp lệ');
@@ -229,7 +240,6 @@ exports.checkIn = async (req, res) => {
     const infoById = new Map(roomInfos.map((r) => [r.RoomID, r]));
     const settings = await rules.readSettings();
     const now = rules.nowString();
-
     const arrivedOnTime = rules.dateOnly(now) === expectedDate;
 
     const rooms = [];

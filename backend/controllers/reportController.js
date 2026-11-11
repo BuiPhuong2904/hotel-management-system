@@ -24,7 +24,6 @@ const readMonth = (value, fallback) => {
   return month >= 1 && month <= 12 ? month : null;
 };
 
-// Đầu tháng (YYYY-MM-01) và đầu tháng kế tiếp
 const monthRange = (year, month) => {
   const nextYear = month === 12 ? year + 1 : year;
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -79,6 +78,7 @@ exports.monthlyReport = async (req, res) => {
         items,
         roomRevenue,
         serviceRevenue: num(totals.ServiceRevenue),
+        discountTotal: num(totals.DiscountTotal),
         totalRevenue: num(totals.TotalRevenue),
         invoiceCount: Number(totals.InvoiceCount),
       },
@@ -119,7 +119,6 @@ exports.overview = async (req, res) => {
 
     const thisRevenue = num(thisTotals.TotalRevenue);
     const lastRevenue = num(lastTotals.TotalRevenue);
-
     const changePercent =
       lastRevenue > 0 ? pricing.round2(((thisRevenue - lastRevenue) / lastRevenue) * 100) : null;
 
@@ -155,6 +154,7 @@ exports.revenueByYear = async (req, res) => {
       month: i + 1,
       roomRevenue: 0,
       serviceRevenue: 0,
+      discountTotal: 0,
       totalRevenue: 0,
       invoiceCount: 0,
     }));
@@ -163,12 +163,14 @@ exports.revenueByYear = async (req, res) => {
       const m = months[Number(paidAt.slice(5, 7)) - 1];
       m.roomRevenue += Number(inv.RoomTotal) + Number(inv.TimeSurchargeTotal);
       m.serviceRevenue += Number(inv.ServiceTotal);
+      m.discountTotal += Number(inv.DiscountAmount);
       m.totalRevenue += Number(inv.TotalAmount);
       m.invoiceCount += 1;
     });
     months.forEach((m) => {
       m.roomRevenue = pricing.round2(m.roomRevenue);
       m.serviceRevenue = pricing.round2(m.serviceRevenue);
+      m.discountTotal = pricing.round2(m.discountTotal);
       m.totalRevenue = pricing.round2(m.totalRevenue);
     });
 
