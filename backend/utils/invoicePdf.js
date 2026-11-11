@@ -145,13 +145,14 @@ const buildInvoicePdf = (invoice) =>
 
       // ----- Tổng kết -----
       y += 10;
-      y = ensureSpace(doc, y, 130);
+      y = ensureSpace(doc, y, 150);
       drawLine(doc, y);
       y += 8;
       const summary = [
         ['Tiền phòng', invoice.RoomTotal],
         ['Phụ thu nhận sớm / trả trễ', invoice.TimeSurchargeTotal],
         ['Tiền dịch vụ', invoice.ServiceTotal],
+        ...(Number(invoice.DiscountAmount) > 0 ? [['Khuyến mãi (giảm tiền phòng)', -Number(invoice.DiscountAmount)]] : []),
         ['Tổng cộng', invoice.TotalAmount, true],
         ['Đã trừ tiền cọc', invoice.DepositDeducted],
         ['Khách thanh toán', invoice.AmountDue, true],

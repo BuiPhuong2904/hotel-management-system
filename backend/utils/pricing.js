@@ -9,7 +9,7 @@ const toUtcDay = (dateString) => {
 const countNights = (checkInDate, checkOutDate) =>
   Math.round((toUtcDay(checkOutDate) - toUtcDay(checkInDate)) / 86400000);
 
-// Hệ số phụ thu khách vượt số khách tiêu chuẩn
+// Hệ số phụ thu khách vượt số khách tiêu chuẩn.
 const guestSurchargeFactor = (guestCount, standardGuests, surchargeRate) =>
   1 + surchargeRate * Math.max(0, guestCount - standardGuests);
 
@@ -30,7 +30,21 @@ const calcRoomSubTotal = ({
       (hasForeigner ? foreignerRate : 1)
   );
 
-// Tiền cọc tối thiểu = tỉ lệ x (đơn giá x số đêm của các phòng)
+// Tiền cọc tối thiểu = tỉ lệ x (đơn giá x số đêm của các phòng), làm tròn lên đồng
 const calcMinDeposit = (baseTotal, rate) => Math.ceil(round2(baseTotal * rate));
 
-module.exports = { round2, countNights, guestSurchargeFactor, calcRoomSubTotal, calcMinDeposit };
+// Số tiền giảm của mã khuyến mãi trên số tiền
+const calcDiscount = (promo, amount) => {
+  if (!promo || !(amount > 0)) return 0;
+  const byPercent = round2((amount * Number(promo.DiscountPercent)) / 100);
+  return round2(Math.min(byPercent, Number(promo.MaxDiscountAmount), amount));
+};
+
+module.exports = {
+  round2,
+  countNights,
+  guestSurchargeFactor,
+  calcRoomSubTotal,
+  calcMinDeposit,
+  calcDiscount,
+};

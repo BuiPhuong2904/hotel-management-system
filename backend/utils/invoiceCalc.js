@@ -1,7 +1,7 @@
 const pricing = require('./pricing');
 const { toDateTimeString } = require('./bookingRules');
 
-const calcInvoice = ({ booking, roomInfos, settings, now, serviceTotal }) => {
+const calcInvoice = ({ booking, roomInfos, settings, now, serviceTotal, promotion = null }) => {
   const nowDate = now.slice(0, 10);
   const nowTime = now.slice(11, 19);
 
@@ -11,7 +11,7 @@ const calcInvoice = ({ booking, roomInfos, settings, now, serviceTotal }) => {
     const checkInDate = checkIn.slice(0, 10);
     const price = Number(d.PriceAtBooking);
 
-    // Số ngày thuê = ngày trả - ngày nhận, tối thiểu 1 
+    // Số ngày thuê = ngày trả - ngày nhận
     const nights = Math.max(1, pricing.countNights(checkInDate, nowDate));
 
     // Tiền phòng theo số khách và loại khách thực tế, giữ hệ số đã lưu lúc đặt
@@ -52,9 +52,11 @@ const calcInvoice = ({ booking, roomInfos, settings, now, serviceTotal }) => {
 
   const roomTotal = pricing.round2(rooms.reduce((s, r) => s + r.SubTotal, 0));
   const timeSurchargeTotal = pricing.round2(rooms.reduce((s, r) => s + r.TimeSurcharge, 0));
-  const totalAmount = pricing.round2(roomTotal + timeSurchargeTotal + serviceTotal);
+  // Khuyến mãi chỉ giảm trên TIỀN PHÒNG
+  const discountAmount = pricing.calcDiscount(promotion, roomTotal);
+  const totalAmount = pricing.round2(roomTotal + timeSurchargeTotal + serviceTotal - discountAmount);
 
-  // Trừ tiền cọc nhưng không vượt quá tổng tiền
+  // Trừ tiền cọc, nhưng không vượt quá tổng tiền
   const deposit = Number(booking.Deposit);
   const depositDeducted = Math.min(deposit, totalAmount);
   const amountDue = pricing.round2(totalAmount - depositDeducted);
@@ -65,6 +67,7 @@ const calcInvoice = ({ booking, roomInfos, settings, now, serviceTotal }) => {
     roomTotal,
     timeSurchargeTotal,
     serviceTotal,
+    discountAmount,
     totalAmount,
     depositDeducted,
     amountDue,
