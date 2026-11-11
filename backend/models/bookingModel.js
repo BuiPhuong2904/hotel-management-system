@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
 const BOOKING_COLUMNS = `BookingID, UserID, GuestName, GuestPhone, CreatedBy, BookingSource,
-  BookingDate, ExpectedCheckIn, ExpectedCheckOut, Status, Deposit, Note`;
+  BookingDate, ExpectedCheckIn, ExpectedCheckOut, Status, Deposit, PromoID, Note`;
 
 // ---------- Các hàm dùng chung cho transaction ----------
 
@@ -55,12 +55,12 @@ const missingOrMaintenance = (roomIds, lockedRooms) => {
   return result;
 };
 
-// Ghi một đơn cùng các phòng
+// Ghi một đơn cùng các phòng (và khách nếu có)
 const insertBooking = async (conn, booking, details) => {
   const [result] = await conn.query(
     `INSERT INTO Bookings (UserID, GuestName, GuestPhone, CreatedBy, BookingSource,
-                           ExpectedCheckIn, ExpectedCheckOut, Status, Deposit, Note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                           ExpectedCheckIn, ExpectedCheckOut, Status, Deposit, PromoID, Note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       booking.UserID,
       booking.GuestName,
@@ -71,6 +71,7 @@ const insertBooking = async (conn, booking, details) => {
       booking.ExpectedCheckOut,
       booking.Status,
       booking.Deposit,
+      booking.PromoID ?? null,
       booking.Note,
     ]
   );
@@ -108,7 +109,7 @@ const insertBooking = async (conn, booking, details) => {
 };
 
 const BookingModel = {
-  // Thông tin các phòng
+  // Thông tin các phòng (giá, số khách, trạng thái)
   async getRoomsForBooking(roomIds) {
     const [rows] = await db.query(
       `SELECT r.RoomID, r.RoomNumber, r.Status, rt.RoomTypeID, rt.TypeName,

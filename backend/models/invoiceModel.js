@@ -3,7 +3,7 @@ const db = require('../config/db');
 const INVOICE_SELECT = `
   SELECT i.InvoiceID, i.BookingID, i.CreatedBy, u.FullName AS CreatedByName,
          i.BillingName, i.BillingAddress, i.RoomTotal, i.TimeSurchargeTotal, i.ServiceTotal,
-         i.DepositDeducted, i.TotalAmount, i.AmountDue, i.PaymentStatus, i.PaymentMethod,
+         i.DiscountAmount, i.DepositDeducted, i.TotalAmount, i.AmountDue, i.PaymentStatus, i.PaymentMethod,
          i.TransactionReference, i.PaidAt,
          b.UserID, b.GuestName, b.GuestPhone, b.BookingSource
   FROM Invoices i
@@ -13,7 +13,7 @@ const INVOICE_SELECT = `
 const SUMMARY_COLUMNS = `i.InvoiceID, i.BookingID, i.BillingName, i.TotalAmount, i.AmountDue,
   i.PaymentStatus, i.PaymentMethod, i.PaidAt`;
 
-// MỘT transaction: thành công thì ghi hết, lỗi thì hủy hết
+// Chạy một nhóm câu lệnh trong MỘT transaction
 const withTransaction = async (work) => {
   const conn = await db.getConnection();
   try {
@@ -65,9 +65,10 @@ const InvoiceModel = {
 
       const [result] = await conn.query(
         `INSERT INTO Invoices (BookingID, CreatedBy, BillingName, BillingAddress, RoomTotal,
-                               TimeSurchargeTotal, ServiceTotal, DepositDeducted, TotalAmount,
-                               AmountDue, PaymentStatus, PaymentMethod, TransactionReference, PaidAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)`,
+                               TimeSurchargeTotal, ServiceTotal, DiscountAmount, DepositDeducted,
+                               TotalAmount, AmountDue, PaymentStatus, PaymentMethod,
+                               TransactionReference, PaidAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)`,
         [
           bookingId,
           invoice.CreatedBy,
@@ -76,6 +77,7 @@ const InvoiceModel = {
           invoice.RoomTotal,
           invoice.TimeSurchargeTotal,
           invoice.ServiceTotal,
+          invoice.DiscountAmount,
           invoice.DepositDeducted,
           invoice.TotalAmount,
           invoice.AmountDue,
@@ -99,7 +101,7 @@ const InvoiceModel = {
     return rows[0] || null;
   },
 
-  // Danh sách hóa đơn, lọc theo khoảng ngày thanh toán, trạng thái, đơn
+  // Danh sách hóa đơn
   async list({ from, to, status, bookingId } = {}) {
     let sql = `SELECT ${SUMMARY_COLUMNS} FROM Invoices i WHERE 1 = 1`;
     const params = [];

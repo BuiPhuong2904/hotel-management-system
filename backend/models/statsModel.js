@@ -30,6 +30,7 @@ const StatsModel = {
       `SELECT COUNT(*) AS InvoiceCount,
               COALESCE(SUM(RoomTotal + TimeSurchargeTotal), 0) AS RoomRevenue,
               COALESCE(SUM(ServiceTotal), 0) AS ServiceRevenue,
+              COALESCE(SUM(DiscountAmount), 0) AS DiscountTotal,
               COALESCE(SUM(TotalAmount), 0) AS TotalRevenue
        FROM Invoices
        WHERE PaymentStatus = 'Paid' AND PaidAt >= ? AND PaidAt < ?`,
@@ -41,7 +42,7 @@ const StatsModel = {
   // Từng hóa đơn đã thanh toán
   async paidInvoices(from, to) {
     const [rows] = await db.query(
-      `SELECT PaidAt, RoomTotal, TimeSurchargeTotal, ServiceTotal, TotalAmount
+      `SELECT PaidAt, RoomTotal, TimeSurchargeTotal, ServiceTotal, DiscountAmount, TotalAmount
        FROM Invoices
        WHERE PaymentStatus = 'Paid' AND PaidAt >= ? AND PaidAt < ?`,
       [from, to]
