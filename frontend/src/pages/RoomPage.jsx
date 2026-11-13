@@ -779,15 +779,15 @@ function RoomPage() {
           <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
             <colgroup>
               <col className="w-12" />
-              <col className="w-[110px]" />
+              <col className="w-[135px]" />
+              <col className="w-[135px]" />
               <col className="w-[120px]" />
-              <col className="w-[120px]" />
-              <col className="w-[110px]" />
-              <col className="w-[150px]" />
+              <col className="w-[115px]" />
+              <col className="w-[155px]" />
               <col />
               <col className="w-[120px]" />
             </colgroup>
-            <thead className="bg-[#F8FAFC] text-xs font-bold tracking-wide text-[#526575]">
+            <thead className="bg-[#F8FAFC] text-sm font-bold tracking-wide text-[#526575]">
               <tr>
                 <th scope="col" className="h-12 border-b-2 border-[#DCECF8] px-4 text-center">#</th>
                 <th scope="col" className="h-12 border-b-2 border-[#DCECF8] px-4">TÊN PHÒNG</th>
@@ -803,8 +803,8 @@ function RoomPage() {
               {filteredRooms.map((room, index) => (
                 <tr
                   key={room.id}
-                  className={`h-12 border-b border-[#DCECF8] ${
-                    index % 2 === 1 ? 'bg-[#DCECF8]' : 'bg-white'
+                  className={`h-12 border-b border-[#DCECF8] transition-colors hover:bg-[#F7FBFF] ${
+                    viewingRoom?.id === room.id ? 'bg-[#E8F5FF]' : 'bg-white'
                   }`}
                 >
                   <td className="px-4 text-center text-[#526575]">{index + 1}</td>
@@ -870,51 +870,36 @@ function RoomPage() {
           </table>
         </div>
 
-        <div className="flex flex-col items-center gap-1 px-4 py-2">
-          <nav aria-label="Phân trang" className="flex items-center gap-1">
+<div className="flex flex-col items-center gap-1 px-4 py-3 text-xs text-[#526575]">
+          <nav aria-label="Phân trang danh sách phòng" className="flex items-center gap-1">
             <button
               type="button"
               aria-label="Trang trước"
               disabled
-              className="flex h-8 w-8 items-center justify-center rounded text-[#526575] disabled:opacity-50"
+              className="flex h-8 w-8 items-center justify-center rounded text-[#526575] disabled:opacity-40"
             >
               <FiChevronLeft aria-hidden="true" className="h-4 w-4" />
             </button>
             <button
               type="button"
               aria-current="page"
-              className="h-8 w-8 bg-[#0D8BEA] text-sm font-semibold text-white"
+              className="h-8 min-w-8 rounded bg-[#0D8BEA] px-2 font-bold text-white"
             >
               1
-            </button>
-            {[2, 3].map((page) => (
-              <button
-                key={page}
-                type="button"
-                className="h-8 w-8 rounded text-sm text-[#526575] hover:bg-[#E8F5FF]"
-              >
-                {page}
-              </button>
-            ))}
-            <span className="flex h-8 w-8 items-center justify-center text-sm text-[#526575]">
-              …
-            </span>
-            <button
-              type="button"
-              className="h-8 w-8 rounded text-sm text-[#526575] hover:bg-[#E8F5FF]"
-            >
-              10
             </button>
             <button
               type="button"
               aria-label="Trang tiếp theo"
-              className="flex h-8 w-8 items-center justify-center rounded text-[#526575] hover:bg-[#E8F5FF]"
+              disabled
+              className="flex h-8 w-8 items-center justify-center rounded text-[#526575] disabled:opacity-40"
             >
               <FiChevronRight aria-hidden="true" className="h-4 w-4" />
             </button>
           </nav>
-          <p className="text-center text-xs text-[#526575]">
-            Hiển thị 1-10 trên tổng 100 phòng
+          <p>
+            {filteredRooms.length > 0
+              ? `Hiển thị 1–${filteredRooms.length} trên tổng ${filteredRooms.length} phòng`
+              : 'Không có phòng'}
           </p>
         </div>
       </section>

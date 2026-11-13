@@ -483,7 +483,7 @@ function ServicePage() {
           <div className="min-w-[1084px]">
             <div
               role="row"
-              className="grid grid-cols-[48px_minmax(300px,320px)_96px_120px_160px_minmax(220px,1fr)_120px] bg-[#F8FAFC]"
+              className="grid grid-cols-[48px_minmax(300px,320px)_125px_120px_160px_minmax(220px,1fr)_120px] bg-[#F8FAFC]"
             >
               {[
                 '#',
@@ -497,7 +497,7 @@ function ServicePage() {
                 <div
                   key={heading}
                   role="columnheader"
-                  className="flex h-12 items-center border-b-2 border-[#DCECF8] px-2 text-xs font-bold text-[#526575] first:justify-center first:px-1 [&:nth-child(4)]:justify-end [&:nth-child(5)]:justify-center [&:nth-child(7)]:justify-center"
+                  className="flex h-12 items-center border-b-2 border-[#DCECF8] px-2 text-sm font-bold text-[#526575] first:justify-center first:px-1 [&:nth-child(4)]:justify-end [&:nth-child(5)]:justify-center [&:nth-child(7)]:justify-center"
                 >
                   {heading}
                 </div>
@@ -509,9 +509,7 @@ function ServicePage() {
                 <div
                   key={service.id}
                   role="row"
-                  className={`grid grid-cols-[48px_minmax(300px,320px)_96px_120px_160px_minmax(220px,1fr)_120px] transition-colors ${
-                    index % 2 === 1 ? 'bg-[#DCECF8]' : 'bg-white'
-                  } hover:bg-[#E8F5FF]`}
+                  className="grid grid-cols-[48px_minmax(300px,320px)_125px_120px_160px_minmax(220px,1fr)_120px] bg-white transition-colors hover:bg-[#E8F5FF]"
                 >
                   <div
                     role="cell"
@@ -544,7 +542,7 @@ function ServicePage() {
                     className="flex min-h-12 items-center justify-center border-b border-[#DCECF8] px-2"
                   >
                     <span
-                      className="whitespace-nowrap rounded-full px-2.5 py-1 text-xs text-white"
+                      className="whitespace-nowrap rounded-full px-2.5 py-1 text-sm text-white"
                       style={{ backgroundColor: statusColors[service.status] }}
                     >
                       {service.status}
@@ -589,7 +587,7 @@ function ServicePage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-1 px-4 py-3 text-xs text-[#526575] sm:flex-row sm:justify-center sm:gap-4">
+        <div className="flex flex-col items-center gap-1 px-4 py-3 text-xs text-[#526575]">
           <nav aria-label="Phân trang dịch vụ" className="flex items-center gap-1">
             <button
               type="button"

@@ -8,6 +8,7 @@ import {
   FiGrid,
   FiLogOut,
   FiSettings,
+  FiTag,
   FiUser,
   FiUsers,
 } from 'react-icons/fi';
@@ -17,10 +18,11 @@ const navigation = [
   { label: 'Quản lý phòng', icon: FiBriefcase, to: '/rooms' },
   { label: 'Đặt phòng', icon: FiCalendar, to: '/bookings' },
   { label: 'Danh mục dịch vụ', icon: FiBookOpen, to: '/services' },
-  { label: 'Dịch vụ phát sinh', icon: FiFileText, to: '#' },
-  { label: 'Hóa đơn thanh toán', icon: FiFileText, to: '#' },
-  { label: 'Hồ sơ khách hàng', icon: FiUsers, to: '#' },
-  { label: 'Quản lý tài khoản', icon: FiUser, to: '#' },
+  { label: 'Dịch vụ phát sinh', icon: FiFileText, to: '/service-usage' },
+  { label: 'Hóa đơn thanh toán', icon: FiFileText, to: '/invoices' },
+  { label: 'Hồ sơ khách hàng', icon: FiUsers, to: '/customers' },
+  { label: 'Quản lý nhân viên', icon: FiUser, to: '/staff' },
+  { label: 'Quản lý khuyến mãi', icon: FiTag, to: '/promotions' },
   { label: 'Báo cáo doanh thu', icon: FiBarChart2, to: '#' },
   { label: 'Cài đặt quy định', icon: FiSettings, to: '#' },
 ];

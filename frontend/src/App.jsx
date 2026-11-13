@@ -4,6 +4,11 @@ import Layout from './components/Layout';
 import RoomPage from './pages/RoomPage';
 import BookingPage from './pages/BookingPage';
 import ServicePage from './pages/ServicePage';
+import ServiceUsagePage from './pages/ServiceUsagePage';
+import InvoicePage from './pages/InvoicePage';
+import CustomerPage from './pages/CustomerPage';
+import StaffPage from './pages/StaffPage';
+import PromotionPage from './pages/PromotionPage';
 
 function App() {
   return (
@@ -15,6 +20,11 @@ function App() {
           <Route path="rooms" element={<RoomPage />} />
           <Route path="bookings" element={<BookingPage />} />
           <Route path="services" element={<ServicePage />} />
+          <Route path="service-usage" element={<ServiceUsagePage />} />
+          <Route path="invoices" element={<InvoicePage />} />
+          <Route path="customers" element={<CustomerPage />} />
+          <Route path="staff" element={<StaffPage />} />
+          <Route path="promotions" element={<PromotionPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

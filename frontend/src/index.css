@@ -18,3 +18,21 @@ body {
   min-height: 100vh;
   display: flex;
 }
+
+@keyframes service-usage-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes promotion-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
