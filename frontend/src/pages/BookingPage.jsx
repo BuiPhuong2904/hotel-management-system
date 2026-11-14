@@ -818,7 +818,7 @@ function BookingPage() {
               </p>
             )}
 
-            <div className="flex flex-col items-center gap-1 bg-[#F8FAFC] px-4 py-2 text-xs text-[#526575] sm:flex-row sm:justify-center sm:gap-4">
+            <div className="flex flex-col items-center gap-1 bg-[#F8FAFC] px-4 py-2 text-xs text-[#526575]">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -834,7 +834,7 @@ function BookingPage() {
                     type="button"
                     aria-current={page === pageNumber ? 'page' : undefined}
                     onClick={() => setPage(pageNumber)}
-                    className={`h-6 min-w-6 rounded px-2 ${
+                    className={`h-6 min-w-6 rounded px-2 text-sm ${
                       page === pageNumber
                         ? 'bg-[#0D8BEA] font-bold text-white'
                         : 'hover:bg-[#E8F5FF]'
@@ -848,7 +848,7 @@ function BookingPage() {
                   type="button"
                   aria-current={page === 10 ? 'page' : undefined}
                   onClick={() => setPage(10)}
-                  className={`h-6 min-w-6 rounded px-2 ${
+                  className={`h-6 min-w-6 rounded px-2 text-sm ${
                     page === 10
                       ? 'bg-[#0D8BEA] font-bold text-white'
                       : 'hover:bg-[#E8F5FF]'
