@@ -23,8 +23,7 @@ const navigation = [
   { label: 'Hồ sơ khách hàng', icon: FiUsers, to: '/customers' },
   { label: 'Quản lý nhân viên', icon: FiUser, to: '/staff' },
   { label: 'Quản lý khuyến mãi', icon: FiTag, to: '/promotions' },
-  { label: 'Báo cáo doanh thu', icon: FiBarChart2, to: '#' },
-  { label: 'Cài đặt quy định', icon: FiSettings, to: '#' },
+  { label: 'Báo cáo doanh thu', icon: FiBarChart2, to: '/reports' },
 ];
 
 function Sidebar({ mobileOpen = false, onNavigate }) {
@@ -44,7 +43,7 @@ function Sidebar({ mobileOpen = false, onNavigate }) {
         >
           <img
             src="/images/grand-hotel-logo.png"
-            alt=""
+            alt="Grand Hotel"
             className="h-8 w-8 shrink-0 object-contain"
           />
           <span className="text-xl font-bold tracking-tight text-[#075A9C]">
@@ -79,16 +78,31 @@ function Sidebar({ mobileOpen = false, onNavigate }) {
         </nav>
       </div>
 
-      <button
-        type="button"
-        className="mx-3 mt-4 flex min-h-10 items-center justify-between rounded-lg border border-[#D9534F] px-3 text-sm font-semibold text-[#D9534F] hover:bg-[#F7FBFF]"
-      >
-        <span className="flex items-center gap-2">
-          <FiLogOut aria-hidden="true" className="h-4 w-4" />
-          Đăng xuất
-        </span>
-        <span aria-hidden="true">→</span>
-      </button>
+      <div className="flex flex-col gap-2 border-t border-[#DCECF8] p-3">
+        <Link
+          to="/settings"
+          onClick={onNavigate}
+          className={`flex min-h-10 items-center gap-3 rounded px-3 py-2 text-sm transition-colors ${
+            pathname === '/settings'
+              ? 'bg-[#E8F5FF] font-semibold text-[#0D8BEA]'
+              : 'font-medium text-[#526575] hover:bg-[#F7FBFF]'
+          }`}
+        >
+          <FiSettings aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span>Cài đặt quy định</span>
+        </Link>
+
+        <button
+          type="button"
+          className="flex min-h-10 w-full items-center justify-between rounded-lg border border-[#D9534F] px-3 text-sm font-semibold text-[#D9534F] hover:bg-[#FDF2F2]"
+        >
+          <span className="flex items-center gap-2">
+            <FiLogOut aria-hidden="true" className="h-4 w-4" />
+            Đăng xuất
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
     </aside>
   );
 }

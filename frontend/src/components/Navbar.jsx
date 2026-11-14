@@ -20,7 +20,11 @@ function Navbar({ mobileOpen, onMenuClick }) {
                   ? 'QUẢN LÝ NHÂN VIÊN'
                   : pathname === '/promotions'
                     ? 'QUẢN LÝ KHUYẾN MÃI'
-                  : 'KHU VỰC LỄ TÂN';
+                    : pathname === '/reports'
+                      ? 'BÁO CÁO DOANH THU'
+                        : pathname === '/settings'
+                          ? 'CÀI ĐẶT QUY ĐỊNH'
+                          : 'KHU VỰC LỄ TÂN';
 
   return (
     <header className="fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[#DCECF8] bg-white/95 px-4 backdrop-blur-md lg:left-64 sm:px-6">

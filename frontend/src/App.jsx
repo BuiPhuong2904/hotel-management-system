@@ -9,6 +9,8 @@ import InvoicePage from './pages/InvoicePage';
 import CustomerPage from './pages/CustomerPage';
 import StaffPage from './pages/StaffPage';
 import PromotionPage from './pages/PromotionPage';
+import ReportPage from './pages/ReportPage';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
@@ -25,6 +27,8 @@ function App() {
           <Route path="customers" element={<CustomerPage />} />
           <Route path="staff" element={<StaffPage />} />
           <Route path="promotions" element={<PromotionPage />} />
+          <Route path="reports" element={<ReportPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
