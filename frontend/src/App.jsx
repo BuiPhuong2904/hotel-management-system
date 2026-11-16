@@ -23,9 +23,9 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/" element={<CustomerHomePage />} />
         <Route path="/customer" element={<CustomerHomePage />} />
         <Route path="/" element={<Layout />}>
-          <Route index element={<DashboardPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="rooms" element={<RoomPage />} />
           <Route path="bookings" element={<BookingPage />} />
