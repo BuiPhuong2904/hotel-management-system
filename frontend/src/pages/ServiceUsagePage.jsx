@@ -1,631 +1,680 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FiCalendar,
-  FiChevronDown,
-  FiChevronLeft,
-  FiChevronRight,
-  FiDownload,
-  FiEye,
-  FiPlus,
-  FiRefreshCw,
-  FiSearch,
-  FiTrash2,
-} from 'react-icons/fi';
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react';
+
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ToastNotification from '../components/ToastNotification';
 import AddServiceUsageModal from '../components/AddServiceUsageModal';
 import ServiceUsageDetailDrawer from '../components/ServiceUsageDetailDrawer';
 
-const initialServiceUsages = [
-  {
-    id: 1,
-    code: 'USG-001',
-    room: 'P.101',
-    customer: 'Nguyễn Văn A',
-    service: 'Nước suối',
-    date: '26/10/2026 09:15',
-    quantity: 2,
-    unit: 'chai',
-    unitPrice: 30000,
-    note: 'VD: Khách gọi thêm',
-    createdBy: 'Lễ tân Nguyễn Văn A',
-    isEditable: true,
-  },
-  {
-    id: 2,
-    code: 'USG-002',
-    room: 'P.102',
-    customer: 'Trần Thị B',
-    service: 'Giặt ủi áo sơ mi',
-    date: '26/10/2026 10:30',
-    quantity: 3,
-    unit: 'món',
-    unitPrice: 35000,
-    note: 'Không có',
-    createdBy: 'Lễ tân Nguyễn Văn A',
-    isEditable: false,
-  },
-  {
-    id: 3,
-    code: 'USG-003',
-    room: 'P.103',
-    customer: 'Lê Văn C',
-    service: 'Buffet sáng',
-    date: '27/10/2026 07:45',
-    quantity: 1,
-    unit: 'suất',
-    unitPrice: 250000,
-    note: 'Không có',
-    createdBy: 'Lễ tân Nguyễn Văn A',
-    isEditable: true,
-  },
-  {
-    id: 4,
-    code: 'USG-004',
-    room: 'P.107',
-    customer: 'Đỗ Xuân B',
-    service: 'Check-in sớm/Check-out muộn (Gói 2 giờ)',
-    date: '26/10/2026 12:00',
-    quantity: 1,
-    unit: 'gói',
-    unitPrice: 150000,
-    note: 'Không có',
-    createdBy: 'Lễ tân Nguyễn Văn A',
-    isEditable: false,
-  },
-  {
-    id: 5,
-    code: 'USG-005',
-    room: 'P.110',
-    customer: 'Lê Thị I',
-    service: 'Nước suối',
-    date: '26/10/2026 14:20',
-    quantity: 1,
-    unit: 'chai',
-    unitPrice: 30000,
-    note: 'Không có',
-    createdBy: 'Lễ tân Nguyễn Văn A',
-    isEditable: true,
-  },
-];
+import {
+  getAllServiceUsagesAPI,
+  getActiveRoomsAPI,
+  createServiceUsageAPI,
+  deleteServiceUsageAPI,
+} from '../services/serviceUsageService';
 
-const pageSize = 5;
+import { getServicesAPI } from '../services/serviceService';
 
-const formatPrice = (price) =>
-  `${new Intl.NumberFormat('vi-VN').format(price)} đ`;
+const PAGE_SIZE = 8;
 
-function ServiceUsagePage() {
-  const [serviceUsages, setServiceUsages] = useState(initialServiceUsages);
-  const [search, setSearch] = useState('');
-  const [roomFilter, setRoomFilter] = useState('Tất cả phòng lưu trú');
-  const [page, setPage] = useState(1);
-  const [deletingService, setDeletingService] = useState(null);
-  const [addModalOpen, setAddModalOpen] = useState(false);
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(Number(value) || 0);
+
+const formatDateTime = (value) => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+// Chuyển dữ liệu API về cấu trúc sử dụng trong giao diện.
+const mapUsageFromAPI = (item) => ({
+  id: item.UsageID,
+  usageId: item.UsageID,
+
+  detailId: item.DetailID,
+  bookingId: item.BookingID,
+  roomId: item.RoomID,
+
+  room: item.RoomNumber || '—',
+  customer: item.GuestName || '—',
+
+  serviceId: item.ServiceID,
+  service: item.ServiceName || '—',
+
+  quantity: Number(item.Quantity) || 0,
+  unit: item.Unit || '—',
+
+  unitPrice: Number(item.PriceAtUsage) || 0,
+  subtotal:
+    Number(item.SubTotal) ||
+    (Number(item.Quantity) || 0) * (Number(item.PriceAtUsage) || 0),
+
+  date: item.RecordedAt,
+
+  isInvoiced: Boolean(item.IsInvoiced),
+  isEditable: Boolean(item.IsEditable),
+});
+
+export default function ServiceUsagePage() {
+  const [serviceUsages, setServiceUsages] = useState([]);
+  const [activeRooms, setActiveRooms] = useState([]);
+  const [services, setServices] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roomFilter, setRoomFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [showAddModal, setShowAddModal] = useState(false);
   const [selectedUsage, setSelectedUsage] = useState(null);
-  const [toast, setToast] = useState({ message: '', type: 'error' });
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  // Tải danh sách lượt sử dụng dịch vụ.
+  const loadServiceUsages = async () => {
+    try {
+      const response = await getAllServiceUsagesAPI();
+
+      const items = response?.data?.Items || response?.data || [];
+
+      setServiceUsages(
+        Array.isArray(items) ? items.map(mapUsageFromAPI) : []
+      );
+    } catch (error) {
+      console.error('Lỗi tải lượt sử dụng dịch vụ:', error);
+      showToast(
+        error?.response?.data?.message ||
+          'Không thể tải danh sách sử dụng dịch vụ.',
+        'error'
+      );
+    }
+  };
+
+  // Tải phòng đang có khách và danh sách dịch vụ.
+  const loadFormData = async () => {
+    try {
+      const [roomResponse, serviceResponse] = await Promise.all([
+        getActiveRoomsAPI(),
+        getServicesAPI(),
+      ]);
+
+      const roomData = roomResponse?.data?.data || roomResponse?.data || [];
+      const serviceData =
+        serviceResponse?.data?.data || serviceResponse?.data || [];
+
+      setActiveRooms(Array.isArray(roomData) ? roomData : []);
+      setServices(Array.isArray(serviceData) ? serviceData : []);
+    } catch (error) {
+      console.error('Lỗi tải dữ liệu biểu mẫu:', error);
+      showToast(
+        error?.response?.data?.message ||
+          'Không thể tải danh sách phòng hoặc dịch vụ.',
+        'error'
+      );
+    }
+  };
+
+  // Tải dữ liệu khi mở trang.
+  const loadData = async () => {
+    setLoading(true);
+
+    await Promise.all([
+      loadServiceUsages(),
+      loadFormData(),
+    ]);
+
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (!toast.message) {
-      return undefined;
-    }
+    loadData();
+  }, []);
 
-    const timeoutId = window.setTimeout(
-      () => setToast({ message: '', type: 'error' }),
-      3500,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [toast]);
+  // Danh sách phòng dùng cho bộ lọc.
+  const rooms = useMemo(() => {
+    return [...new Set(serviceUsages.map((item) => item.room).filter(Boolean))];
+  }, [serviceUsages]);
 
-  const rooms = useMemo(
-    () => [
-      ...new Map(
-        serviceUsages.map(({ room, customer }) => [room, { room, customer }]),
-      ).values(),
-    ],
-    [serviceUsages],
-  );
-
+  // Tìm kiếm và lọc dữ liệu.
   const filteredUsages = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('vi');
+    const keyword = searchTerm.trim().toLowerCase();
 
-    return serviceUsages.filter((usage) => {
+    return serviceUsages.filter((item) => {
       const matchesSearch =
-        !query ||
-        `${usage.room} ${usage.customer} ${usage.service}`
-          .toLocaleLowerCase('vi')
-          .includes(query);
+        !keyword ||
+        String(item.room).toLowerCase().includes(keyword) ||
+        String(item.customer).toLowerCase().includes(keyword) ||
+        String(item.service).toLowerCase().includes(keyword);
+
       const matchesRoom =
-        roomFilter === 'Tất cả phòng lưu trú' || usage.room === roomFilter;
+        roomFilter === 'all' || String(item.room) === String(roomFilter);
 
       return matchesSearch && matchesRoom;
     });
-  }, [roomFilter, search, serviceUsages]);
+  }, [serviceUsages, searchTerm, roomFilter]);
 
-  const pageCount = Math.max(1, Math.ceil(filteredUsages.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleUsages = filteredUsages.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+  // Phân trang.
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsages.length / PAGE_SIZE)
   );
 
-  const resetFilters = () => {
-    setSearch('');
-    setRoomFilter('Tất cả phòng lưu trú');
-    setPage(1);
-  };
+  const paginatedUsages = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
 
-  const requestDelete = (usage) => {
-    if (usage.isEditable) {
-      setDeletingService(usage);
-      return;
+    return filteredUsages.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredUsages, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roomFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
     }
+  }, [currentPage, totalPages]);
 
-    setToast({
-      message: 'Không thể xóa dịch vụ thuộc hóa đơn đã đóng',
-      type: 'error',
-    });
-  };
+  // Thống kê.
+  const totalUsageCount = serviceUsages.length;
 
-  const confirmDelete = () => {
-    if (!deletingService) {
-      return;
-    }
+  const totalQuantity = serviceUsages.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
-    setServiceUsages((currentUsages) =>
-      currentUsages.filter((usage) => usage.id !== deletingService.id),
-    );
-    setSelectedUsage((currentUsage) =>
-      currentUsage?.id === deletingService.id ? null : currentUsage,
-    );
-    setDeletingService(null);
-  };
+  const totalRevenue = serviceUsages.reduce(
+    (sum, item) => sum + item.subtotal,
+    0
+  );
 
-  const addServiceUsages = ({ room, customer, note, items }) => {
-    const date = new Intl.DateTimeFormat('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-      .format(new Date())
-      .replace(',', '');
+  const uniqueRoomCount = new Set(
+    serviceUsages.map((item) => item.room)
+  ).size;
 
-    setServiceUsages((currentUsages) => {
-      const nextCode = Math.max(
-        0,
-        ...currentUsages.map((usage) =>
-          Number(usage.code?.replace('USG-', '') || 0),
-        ),
+  // Thêm lượt sử dụng dịch vụ.
+  const handleAddServiceUsages = async (formData) => {
+    try {
+      const items = formData?.items || [];
+
+      if (!formData?.RoomID || items.length === 0) {
+        showToast('Vui lòng chọn phòng và dịch vụ.', 'error');
+        return;
+      }
+
+      for (const item of items) {
+        await createServiceUsageAPI({
+          RoomID: Number(formData.RoomID),
+          ServiceID: Number(item.ServiceID),
+          Quantity: Number(item.Quantity),
+        });
+      }
+
+      setShowAddModal(false);
+
+      await loadServiceUsages();
+
+      showToast('Thêm lượt sử dụng dịch vụ thành công.');
+    } catch (error) {
+      console.error('Lỗi thêm lượt sử dụng:', error);
+
+      await loadServiceUsages();
+
+      showToast(
+        error?.response?.data?.message ||
+          'Không thể thêm lượt sử dụng dịch vụ.',
+        'error'
       );
-      const timestamp = Date.now();
-
-      return [
-        ...items.map((item, index) => ({
-          ...item,
-          id: timestamp + index,
-          code: `USG-${String(nextCode + index + 1).padStart(3, '0')}`,
-          room,
-          customer,
-          date,
-          note,
-          createdBy: 'Lễ tân Nguyễn Văn A',
-          isEditable: true,
-        })),
-        ...currentUsages,
-      ];
-    });
-    setPage(1);
-    setAddModalOpen(false);
-    setToast({ message: 'Ghi nhận dịch vụ thành công', type: 'success' });
+    }
   };
 
-  const exportUsages = () => {
-    const rows = [
-      [
-        'Phòng',
-        'Khách hàng',
-        'Dịch vụ',
-        'Thời gian',
-        'Số lượng',
-        'Đơn giá',
-        'Thành tiền',
-      ],
-      ...filteredUsages.map((usage) => [
-        usage.room,
-        usage.customer,
-        usage.service,
-        usage.date,
-        `${usage.quantity} ${usage.unit}`,
-        usage.unitPrice,
-        usage.quantity * usage.unitPrice,
-      ]),
+  // Mở hộp thoại xác nhận xóa.
+  const handleRequestDelete = (usage) => {
+    if (!usage.isEditable || usage.isInvoiced) {
+      showToast(
+        'Lượt sử dụng này không thể xóa vì đã khóa hoặc đã lập hóa đơn.',
+        'error'
+      );
+      return;
+    }
+
+    setDeleteTarget(usage);
+  };
+
+  // Xóa lượt sử dụng.
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      setDeleting(true);
+
+      await deleteServiceUsageAPI(deleteTarget.usageId);
+
+      setServiceUsages((previous) =>
+        previous.filter(
+          (item) => String(item.usageId) !== String(deleteTarget.usageId)
+        )
+      );
+
+      if (
+        selectedUsage &&
+        selectedUsage.usageId === deleteTarget.usageId
+      ) {
+        setSelectedUsage(null);
+      }
+
+      setDeleteTarget(null);
+      showToast('Xóa lượt sử dụng dịch vụ thành công.');
+    } catch (error) {
+      console.error('Lỗi xóa lượt sử dụng:', error);
+
+      showToast(
+        error?.response?.data?.message ||
+          'Không thể xóa lượt sử dụng dịch vụ.',
+        'error'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Xuất CSV.
+  const handleExportCSV = () => {
+    if (filteredUsages.length === 0) {
+      showToast('Không có dữ liệu để xuất.', 'error');
+      return;
+    }
+
+    const headers = [
+      'Mã sử dụng',
+      'Phòng',
+      'Khách hàng',
+      'Dịch vụ',
+      'Thời gian',
+      'Số lượng',
+      'Đơn vị',
+      'Đơn giá',
+      'Thành tiền',
     ];
-    const csv = `\uFEFF${rows
+
+    const rows = filteredUsages.map((item) => [
+      item.usageId,
+      item.room,
+      item.customer,
+      item.service,
+      formatDateTime(item.date),
+      item.quantity,
+      item.unit,
+      item.unitPrice,
+      item.subtotal,
+    ]);
+
+    const csvContent = [
+      headers,
+      ...rows,
+    ]
       .map((row) =>
         row
-          .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
-          .join(','),
+          .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
+          .join(',')
       )
-      .join('\n')}`;
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+      .join('\n');
+
+    const blob = new Blob(
+      ['\uFEFF' + csvContent],
+      { type: 'text/csv;charset=utf-8;' }
     );
+
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
-    link.download = 'dich-vu-phat-sinh.csv';
+    link.download = 'danh-sach-su-dung-dich-vu.csv';
     link.click();
+
     URL.revokeObjectURL(url);
   };
 
   return (
-    <section className="flex w-full min-w-0 flex-col gap-6">
-      <section
-        aria-label="Thống kê dịch vụ phát sinh"
-        className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <article className="flex min-h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#0D8BEA]">
-            TỔNG LƯỢT GHI NHẬN
-          </h2>
-          <div className="pt-2">
-            <p className="flex items-baseline gap-2 text-xl font-bold text-[#0D8BEA]">
-              24 <span className="text-xs font-normal text-[#526575]">lượt</span>
-            </p>
-            <p className="mt-2 text-xs text-[#526575]">
-              So với hôm qua: <span className="text-[#2E8B57]">+15%</span>
-            </p>
-          </div>
-        </article>
-        <article className="flex min-h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#075A9C]">
-            DOANH THU DỊCH VỤ
-          </h2>
-          <div className="pt-2">
-            <p className="text-xl font-bold text-[#075A9C]">1.085.000 đ</p>
-            <p className="mt-2 text-xs text-[#526575]">
-              Đã cộng dồn vào hóa đơn phòng
-            </p>
-          </div>
-        </article>
-        <article className="flex min-h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#2E8B57]">
-            DỊCH VỤ PHỔ BIẾN NHẤT
-          </h2>
-          <div className="pt-2">
-            <p className="text-xl font-bold text-[#2E8B57]">Nước suối</p>
-            <p className="mt-2 text-xs text-[#526575]">
-              12 lượt gọi trong ngày
-            </p>
-          </div>
-        </article>
-        <article className="flex min-h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#D97706]">
-            SỐ PHÒNG PHÁT SINH
-          </h2>
-          <div className="pt-2">
-            <p className="flex items-baseline gap-2 text-xl font-bold text-[#D97706]">
-              08 <span className="text-xs font-normal text-[#526575]">phòng</span>
-            </p>
-            <p className="mt-2 text-xs text-[#526575]">
-              Trên tổng số 36 phòng đang có khách
-            </p>
-          </div>
-        </article>
-      </section>
+    <div className="space-y-6">
+      {/* Tiêu đề trang */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Quản lý sử dụng dịch vụ
+          </h1>
 
-      <section
-        aria-label="Tìm kiếm và lọc dịch vụ phát sinh"
-        className="grid w-full min-w-0 gap-4 rounded-xl border border-[#DCECF8] bg-white p-4 sm:p-[17px] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
-      >
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
-            <label className="relative block min-w-0 flex-1">
-              <FiSearch
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#526575]"
-              />
-              <input
-                type="search"
-                aria-label="Tìm theo khách hàng, phòng hoặc dịch vụ"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                placeholder="Tìm theo khách hàng, phòng..."
-                className="h-10 w-full rounded-lg border border-[#DCECF8] bg-[#F7FBFF] pl-9 pr-3 text-xs text-[#526575] outline-none placeholder:text-[#526575] focus:border-[#0D8BEA]"
-              />
-            </label>
-            <button
-              type="button"
-              aria-label="Đặt lại bộ lọc"
-              onClick={resetFilters}
-              className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-lg border border-[#DCECF8] bg-white text-[#526575] transition-colors hover:bg-[#F7FBFF] sm:self-auto"
-            >
-              <FiRefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <label className="relative flex h-10 min-w-[192px] flex-1 items-center rounded-lg border border-[#DCECF8] bg-white sm:flex-none">
-              <select
-                aria-label="Lọc theo phòng"
-                value={roomFilter}
-                onChange={(event) => {
-                  setRoomFilter(event.target.value);
-                  setPage(1);
-                }}
-                className="h-full w-full appearance-none rounded-lg bg-transparent px-4 pr-10 text-sm text-[#526575] outline-none"
-              >
-                <option>Tất cả phòng lưu trú</option>
-                {rooms.map(({ room }) => (
-                  <option key={room} value={room}>
-                    {room}
-                  </option>
-                ))}
-              </select>
-              <FiChevronDown
-                aria-hidden="true"
-                className="pointer-events-none absolute right-3 h-4 w-4 text-[#526575]"
-              />
-            </label>
-            <label className="flex h-10 min-w-[192px] flex-1 items-center gap-2 rounded-lg border border-[#DCECF8] bg-white px-4 text-sm text-[#526575] sm:flex-none">
-              <span>Từ:</span>
-              <input
-                type="text"
-                aria-label="Ngày bắt đầu"
-                placeholder="DD/MM/YYYY"
-                className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[#526575]"
-              />
-              <FiCalendar aria-hidden="true" className="h-4 w-4 shrink-0" />
-            </label>
-            <label className="flex h-10 min-w-[192px] flex-1 items-center gap-2 rounded-lg border border-[#DCECF8] bg-white px-4 text-sm text-[#526575] sm:flex-none">
-              <span>Đến:</span>
-              <input
-                type="text"
-                aria-label="Ngày kết thúc"
-                placeholder="DD/MM/YYYY"
-                className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[#526575]"
-              />
-              <FiCalendar aria-hidden="true" className="h-4 w-4 shrink-0" />
-            </label>
-          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Theo dõi các dịch vụ khách hàng đã sử dụng trong thời gian lưu trú.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-start gap-3 xl:justify-end">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={exportUsages}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#DCECF8] bg-[#F7FBFF] px-4 text-sm font-bold text-[#0D8BEA] transition-colors hover:bg-[#DCECF8]"
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-            <FiDownload aria-hidden="true" className="h-4 w-4" />
+            <RefreshCw
+              size={16}
+              className={loading ? 'animate-spin' : ''}
+            />
+            Làm mới
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Download size={16} />
             Xuất Excel
           </button>
+
           <button
             type="button"
-            onClick={() => setAddModalOpen(true)}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white transition-colors hover:bg-[#0D8BEA]"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <FiPlus aria-hidden="true" className="h-4 w-4" />
-            Ghi nhận dịch vụ
+            <Plus size={16} />
+            Thêm dịch vụ
           </button>
         </div>
-      </section>
+      </div>
 
-      <section className="w-full min-w-0 overflow-hidden rounded-xl border border-[#DCECF8] bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCECF8] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-[#075A9C]">
-              Dịch vụ phát sinh
-            </h2>
-            <span className="rounded bg-[#F7FBFF] px-2 py-1 text-[10px] text-[#0D8BEA]">
-              {filteredUsages.length} kết quả
-            </span>
-          </div>
-          <span className="text-[10px] text-[#526575]">
-            Sắp xếp: Thứ tự mới nhất
-          </span>
+      {/* Các thẻ thống kê */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Lượt sử dụng</p>
+          <p className="mt-2 text-2xl font-bold text-gray-800">
+            {totalUsageCount}
+          </p>
         </div>
 
-        <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[1134px] table-fixed border-collapse text-sm leading-[normal] text-[#526575]">
-            <colgroup>
-              <col style={{ width: '5.291%' }} />
-              <col style={{ width: '17.637%' }} />
-              <col style={{ width: '23.457%' }} />
-              <col style={{ width: '14.109%' }} />
-              <col style={{ width: '7.760%' }} />
-              <col style={{ width: '10.582%' }} />
-              <col style={{ width: '10.582%' }} />
-              <col style={{ width: '10.582%' }} />
-            </colgroup>
-            <thead className="bg-[#F8FAFC]">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Tổng số lượng</p>
+          <p className="mt-2 text-2xl font-bold text-gray-800">
+            {totalQuantity}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Số phòng sử dụng</p>
+          <p className="mt-2 text-2xl font-bold text-gray-800">
+            {uniqueRoomCount}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Tổng tiền dịch vụ</p>
+          <p className="mt-2 text-2xl font-bold text-blue-600">
+            {formatCurrency(totalRevenue)}
+          </p>
+        </div>
+      </div>
+
+      {/* Bộ lọc */}
+      <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row">
+          <div className="relative flex-1">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Tìm theo phòng, khách hàng hoặc dịch vụ..."
+              className="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Calendar size={17} className="text-gray-400" />
+
+            <select
+              value={roomFilter}
+              onChange={(event) => setRoomFilter(event.target.value)}
+              className="min-w-[160px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="all">Tất cả phòng</option>
+
+              {rooms.map((room) => (
+                <option key={room} value={room}>
+                  Phòng {room}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Bảng danh sách */}
+      <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
               <tr>
-                {[
-                  { label: '#', align: 'text-center' },
-                  { label: 'PHÒNG & KHÁCH HÀNG', align: 'text-left' },
-                  { label: 'DỊCH VỤ', align: 'text-left' },
-                  { label: 'THỜI GIAN', align: 'text-center' },
-                  { label: 'SỐ LƯỢNG', align: 'text-center' },
-                  { label: 'ĐƠN GIÁ', align: 'text-right' },
-                  { label: 'THÀNH TIỀN', align: 'text-right' },
-                  { label: 'THAO TÁC', align: 'text-center' },
-                ].map(({ label, align }) => (
-                  <th
-                    key={label}
-                    scope="col"
-                    className={`h-12 border-b-2 border-[#DCECF8] px-4 py-0 text-sm font-bold leading-[normal] align-middle ${align}`}
-                  >
-                    {label}
-                  </th>
-                ))}
+                <th className="px-5 py-4 font-semibold">#</th>
+                <th className="px-5 py-4 font-semibold">
+                  Phòng & khách hàng
+                </th>
+                <th className="px-5 py-4 font-semibold">Dịch vụ</th>
+                <th className="px-5 py-4 font-semibold">Thời gian</th>
+                <th className="px-5 py-4 text-center font-semibold">
+                  Số lượng
+                </th>
+                <th className="px-5 py-4 text-right font-semibold">
+                  Đơn giá
+                </th>
+                <th className="px-5 py-4 text-right font-semibold">
+                  Thành tiền
+                </th>
+                <th className="px-5 py-4 text-center font-semibold">
+                  Thao tác
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {visibleUsages.length > 0 ? (
-                visibleUsages.map((usage, index) => (
-                  <tr
-                    key={usage.id}
-                    aria-selected={selectedUsage?.id === usage.id}
-                    tabIndex={0}
-                    onClick={(event) => {
-                      if (!event.target.closest('[data-row-delete]')) {
-                        setSelectedUsage(usage);
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        !event.target.closest('[data-row-delete]') &&
-                        (event.key === 'Enter' || event.key === ' ')
-                      ) {
-                        event.preventDefault();
-                        setSelectedUsage(usage);
-                      }
-                    }}
-                    className={`h-12 cursor-pointer border-b border-[#DCECF8] text-sm font-normal leading-[normal] transition-colors focus-visible:outline-2 focus-visible:outline-[#0D8BEA] ${
-                      selectedUsage?.id === usage.id
-                        ? 'bg-[#DCECF8] hover:bg-[#DCECF8]'
-                        : 'bg-white hover:bg-[#F7FBFF]'
-                    }`}
+
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-5 py-12 text-center text-gray-500"
                   >
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-center align-middle text-sm font-normal leading-[normal]">
-                      {(currentPage - 1) * pageSize + index + 1}
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : paginatedUsages.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-5 py-12 text-center text-gray-500"
+                  >
+                    Không tìm thấy lượt sử dụng dịch vụ nào.
+                  </td>
+                </tr>
+              ) : (
+                paginatedUsages.map((usage, index) => (
+                  <tr
+                    key={usage.usageId}
+                    className="transition-colors hover:bg-gray-50"
+                  >
+                    <td className="px-5 py-4 text-gray-500">
+                      {(currentPage - 1) * PAGE_SIZE + index + 1}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-left align-middle text-sm font-normal leading-[normal]">
-                      <p className="font-bold leading-[normal]">{usage.room}</p>
-                      <p className="truncate font-normal leading-[normal]">
+
+                    <td className="px-5 py-4">
+                      <p className="font-semibold text-gray-800">
+                        Phòng {usage.room}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
                         {usage.customer}
                       </p>
                     </td>
-                    <td
-                      className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-left align-middle text-sm font-normal leading-[normal]"
-                      title={usage.service}
-                    >
-                      <span className="block truncate">{usage.service}</span>
+
+                    <td className="px-5 py-4 font-medium text-gray-800">
+                      {usage.service}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-right align-middle text-sm font-normal leading-[normal]">
-                      {usage.date}
+
+                    <td className="px-5 py-4 text-gray-500">
+                      {formatDateTime(usage.date)}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-center align-middle text-sm font-normal leading-[normal]">
+
+                    <td className="px-5 py-4 text-center text-gray-700">
                       {usage.quantity} {usage.unit}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-right align-middle text-sm font-normal leading-[normal]">
-                      {formatPrice(usage.unitPrice)}
+
+                    <td className="px-5 py-4 text-right text-gray-700">
+                      {formatCurrency(usage.unitPrice)}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-right align-middle text-sm font-normal leading-[normal]">
-                      {formatPrice(usage.quantity * usage.unitPrice)}
+
+                    <td className="px-5 py-4 text-right font-semibold text-gray-800">
+                      {formatCurrency(usage.subtotal)}
                     </td>
-                    <td className="h-12 overflow-hidden border-b border-[#DCECF8] px-4 py-0 text-center align-middle text-sm font-normal leading-[normal]">
-                      <div className="flex items-center justify-center gap-[10px]">
+
+                    <td className="px-5 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           type="button"
-                          aria-label={`Xem ghi nhận dịch vụ ${usage.service} phòng ${usage.room}`}
+                          title="Xem chi tiết"
                           onClick={() => setSelectedUsage(usage)}
-                          className="rounded p-0.5 text-[#526575] transition-colors hover:bg-[#F7FBFF]"
+                          className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
                         >
-                          <FiEye aria-hidden="true" className="h-5 w-5" />
+                          <Eye size={17} />
                         </button>
+
                         <button
                           type="button"
-                          data-row-delete
-                          aria-label={`Xóa ghi nhận dịch vụ ${usage.service} phòng ${usage.room}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            requestDelete(usage);
-                          }}
-                          className="rounded p-0.5 text-[#D9534F] transition-colors hover:bg-[#F7FBFF]"
+                          title="Xóa lượt sử dụng"
+                          disabled={!usage.isEditable || usage.isInvoiced}
+                          onClick={() => handleRequestDelete(usage)}
+                          className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                          <FiTrash2 aria-hidden="true" className="h-5 w-5" />
+                          <Trash2 size={17} />
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="h-20 border-b border-[#DCECF8] px-4 text-center text-[#526575]"
-                  >
-                    Không tìm thấy dịch vụ phát sinh
-                  </td>
-                </tr>
               )}
             </tbody>
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-1 px-4 py-2">
-          <button
-            type="button"
-            aria-label="Trang trước"
-            disabled={currentPage === 1}
-            onClick={() => setPage((value) => Math.max(1, value - 1))}
-            className="flex h-8 w-8 items-center justify-center rounded text-[#526575] disabled:opacity-40"
-          >
-            <FiChevronLeft aria-hidden="true" className="h-3 w-3" />
-          </button>
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map(
-            (pageNumber) => (
-              <button
-                key={pageNumber}
-                type="button"
-                aria-current={pageNumber === currentPage ? 'page' : undefined}
-                onClick={() => setPage(pageNumber)}
-                className={`flex h-8 min-w-8 items-center justify-center rounded px-2 text-xs ${
-                  pageNumber === currentPage
-                    ? 'bg-[#0D8BEA] text-white'
-                    : 'text-[#526575] hover:bg-[#F7FBFF]'
-                }`}
-              >
-                {pageNumber}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            aria-label="Trang tiếp theo"
-            disabled={currentPage === pageCount}
-            onClick={() =>
-              setPage((value) => Math.min(pageCount, value + 1))
-            }
-            className="flex h-8 w-8 items-center justify-center rounded text-[#526575] disabled:opacity-40"
-          >
-            <FiChevronRight aria-hidden="true" className="h-3 w-3" />
-          </button>
-          <p className="w-full text-center text-xs text-[#526575]">
-            Hiển thị{' '}
-            {filteredUsages.length === 0
-              ? 0
-              : (currentPage - 1) * pageSize + 1}
-            -{Math.min(currentPage * pageSize, filteredUsages.length)} trên
-            tổng {filteredUsages.length} dịch vụ
-          </p>
-        </div>
-      </section>
+        {/* Phân trang */}
+        {!loading && filteredUsages.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              Hiển thị{' '}
+              {(currentPage - 1) * PAGE_SIZE + 1}–
+              {Math.min(currentPage * PAGE_SIZE, filteredUsages.length)} trong{' '}
+              {filteredUsages.length} lượt sử dụng
+            </p>
 
-      <DeleteConfirmModal
-        service={deletingService}
-        onCancel={() => setDeletingService(null)}
-        onConfirm={confirmDelete}
-      />
-      {addModalOpen && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((page) => page - 1)}
+                className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronLeft size={17} />
+              </button>
+
+              <span className="px-2 text-sm text-gray-600">
+                Trang {currentPage} / {totalPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((page) => page + 1)}
+                className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal thêm dịch vụ */}
+      {showAddModal && (
         <AddServiceUsageModal
-          rooms={rooms}
-          onClose={() => setAddModalOpen(false)}
-          onSubmit={addServiceUsages}
+          rooms={activeRooms}
+          services={services}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleAddServiceUsages}
         />
       )}
-      <ServiceUsageDetailDrawer
-        usage={selectedUsage}
-        onClose={() => setSelectedUsage(null)}
-        onDelete={requestDelete}
-      />
-      <ToastNotification message={toast.message} type={toast.type} />
-    </section>
+
+      {/* Drawer chi tiết */}
+      {selectedUsage && (
+        <ServiceUsageDetailDrawer
+          usage={selectedUsage}
+          onClose={() => setSelectedUsage(null)}
+          onDelete={() => {
+            handleRequestDelete(selectedUsage);
+          }}
+        />
+      )}
+
+      {/* Xác nhận xóa */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          isOpen={true}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+          loading={deleting}
+          title="Xóa lượt sử dụng dịch vụ"
+          message={`Bạn có chắc chắn muốn xóa lượt sử dụng dịch vụ "${deleteTarget.service}" của phòng ${deleteTarget.room} không?`}
+        />
+      )}
+
+      {/* Thông báo */}
+      {toast && (
+        <ToastNotification
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </div>
   );
 }
-
-export default ServiceUsagePage;

@@ -73,6 +73,78 @@ const ServiceUsageModel = {
     const [result] = await db.query('DELETE FROM ServiceUsages WHERE UsageID = ?', [id]);
     return result.affectedRows > 0;
   },
+
+    // Lấy toàn bộ lượt sử dụng dịch vụ
+  async listAll() {
+    const [rows] = await db.query(`
+      SELECT
+        su.UsageID,
+        su.DetailID,
+        su.ServiceID,
+        s.ServiceName,
+        s.Unit,
+        su.Quantity,
+        su.PriceAtUsage,
+        su.SubTotal,
+        su.RecordedAt,
+
+        bd.BookingID,
+        bd.RoomID,
+        r.RoomNumber,
+
+        b.GuestName,
+        b.Status AS BookingStatus,
+
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM Invoices i
+            WHERE i.BookingID = bd.BookingID
+              AND i.PaymentStatus <> 'Cancelled'
+          ) THEN 1
+          ELSE 0
+        END AS IsInvoiced
+
+      FROM ServiceUsages su
+      JOIN Services s
+        ON s.ServiceID = su.ServiceID
+      JOIN BookingDetails bd
+        ON bd.DetailID = su.DetailID
+      JOIN Rooms r
+        ON r.RoomID = bd.RoomID
+      JOIN Bookings b
+        ON b.BookingID = bd.BookingID
+
+      ORDER BY su.RecordedAt DESC, su.UsageID DESC
+    `);
+
+    return rows;
+  },
+
+  // Lấy danh sách phòng đang có khách
+  async listActiveRooms() {
+    const [rows] = await db.query(`
+      SELECT
+        r.RoomID,
+        r.RoomNumber,
+        bd.BookingID,
+        b.GuestName
+
+      FROM Rooms r
+      JOIN BookingDetails bd
+        ON bd.RoomID = r.RoomID
+      JOIN Bookings b
+        ON b.BookingID = bd.BookingID
+
+      WHERE b.Status = 'CheckedIn'
+        AND bd.ActualCheckIn IS NOT NULL
+        AND bd.ActualCheckOut IS NULL
+
+      ORDER BY r.RoomNumber ASC
+    `);
+
+    return rows;
+  },
 };
 
 module.exports = ServiceUsageModel;

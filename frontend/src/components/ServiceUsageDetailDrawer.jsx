@@ -1,7 +1,8 @@
+
 import { FiX } from 'react-icons/fi';
 
 const formatPrice = (price) =>
-  `${new Intl.NumberFormat('vi-VN').format(price)} đ`;
+  `${new Intl.NumberFormat('vi-VN').format(Number(price || 0))} đ`;
 
 function ServiceUsageDetailDrawer({ usage, onClose, onDelete }) {
   if (!usage) {
@@ -48,7 +49,7 @@ function ServiceUsageDetailDrawer({ usage, onClose, onDelete }) {
             <div className="border-b border-[#DCECF8]/70 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-3">
               <h3 className="text-sm font-bold text-[#526575]">THÀNH TIỀN</h3>
               <p className="mt-1 text-lg font-bold text-[#075A9C]">
-                {formatPrice(usage.quantity * usage.unitPrice)}
+                {formatPrice(usage.subtotal)}
               </p>
             </div>
             <div className="border-b border-[#DCECF8]/70 pb-3 sm:border-b-0 sm:border-r sm:px-3 sm:pb-0">
@@ -81,9 +82,15 @@ function ServiceUsageDetailDrawer({ usage, onClose, onDelete }) {
                 </dd>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
+                <dt className="text-[#526575]">Trạng thái hóa đơn:</dt>
+                <dd className="text-right text-[#1E293B]">
+                  {usage.isInvoiced ? 'Đã lập hóa đơn' : 'Chưa lập hóa đơn'}
+                </dd>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <dt className="text-[#526575]">Ghi chú:</dt>
                 <dd className="break-words text-right text-[#1E293B]">
-                  {usage.note || 'Không có'}
+                  {usage.note || 'Chưa có dữ liệu ghi chú'}
                 </dd>
               </div>
             </dl>
@@ -94,8 +101,10 @@ function ServiceUsageDetailDrawer({ usage, onClose, onDelete }) {
               LỊCH SỬ THAO TÁC
             </h3>
             <p className="mt-3 text-sm leading-normal text-[#526575]">
-              {usage.date.split(' ')[1]} - {usage.date.split(' ')[0]} | Tạo mới
-              bởi: {usage.createdBy || 'Lễ tân Nguyễn Văn A'}
+              {usage.date} | Ghi nhận dịch vụ
+            </p>
+            <p className="mt-2 text-xs text-[#526575]">
+              Người ghi nhận chưa được lưu trong database.
             </p>
           </section>
         </div>
@@ -110,8 +119,9 @@ function ServiceUsageDetailDrawer({ usage, onClose, onDelete }) {
           </button>
           <button
             type="button"
+            disabled={!usage.isEditable}
             onClick={() => onDelete(usage)}
-            className="flex min-h-[43px] items-center justify-center rounded-lg bg-[#D9534F] px-4 py-3 text-sm font-bold text-white sm:px-6"
+            className="flex min-h-[43px] items-center justify-center rounded-lg bg-[#D9534F] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:px-6"
           >
             Xóa / Hủy ghi nhận
           </button>

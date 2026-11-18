@@ -1,3 +1,4 @@
+
 import { useMemo, useState } from 'react';
 import {
   FiChevronDown,
@@ -6,40 +7,34 @@ import {
   FiX,
 } from 'react-icons/fi';
 
-const serviceOptions = [
-  { name: 'Nước suối', unit: 'chai', price: 30000 },
-  { name: 'Giặt ủi áo sơ mi', unit: 'món', price: 35000 },
-  { name: 'Buffet sáng', unit: 'suất', price: 250000 },
-  { name: 'Gói Minibar Đặc biệt', unit: 'gói', price: 480000 },
-  {
-    name: 'Check-in sớm/Check-out muộn (Gói 2 giờ)',
-    unit: 'gói',
-    price: 150000,
-  },
-];
-
-const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(value);
+const formatNumber = (value) =>
+  new Intl.NumberFormat('vi-VN').format(value);
 
 const createEmptyItem = () => ({
   key: `${Date.now()}-${Math.random()}`,
-  serviceName: '',
+  serviceId: '',
   quantity: 1,
 });
 
-function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
-  const [room, setRoom] = useState('');
+function AddServiceUsageModal({
+  rooms = [],
+  services = [],
+  onClose,
+  onSubmit,
+}) {
+  const [roomId, setRoomId] = useState('');
   const [items, setItems] = useState(() => [createEmptyItem()]);
-  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const total = useMemo(
     () =>
       items.reduce((sum, item) => {
-        const service = serviceOptions.find(
-          (option) => option.name === item.serviceName,
+        const service = services.find(
+          (option) => String(option.ServiceID) === String(item.serviceId),
         );
-        return sum + (service?.price ?? 0) * Number(item.quantity || 0);
+        return sum + Number(service?.Price || 0) * Number(item.quantity || 0);
       }, 0),
-    [items],
+    [items, services],
   );
 
   const updateItem = (key, field, value) => {
@@ -50,36 +45,44 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
     );
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const selectedRoom = rooms.find((option) => option.room === room);
-    if (!selectedRoom || items.some((item) => !item.serviceName)) {
+
+    if (!roomId || items.some((item) => !item.serviceId)) {
       return;
     }
 
-    onSubmit({
-      room: selectedRoom.room,
-      customer: selectedRoom.customer,
-      note: note.trim() || 'Không có',
-      items: items.map((item) => {
-        const service = serviceOptions.find(
-          (option) => option.name === item.serviceName,
-        );
-        return {
-          service: service.name,
-          unit: service.unit,
-          unitPrice: service.price,
-          quantity: Number(item.quantity),
-        };
-      }),
-    });
+    if (
+      items.some(
+        (item) =>
+          !Number.isInteger(Number(item.quantity)) ||
+          Number(item.quantity) < 1 ||
+          Number(item.quantity) > 999,
+      )
+    ) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await onSubmit({
+        RoomID: Number(roomId),
+        items: items.map((item) => ({
+          ServiceID: Number(item.serviceId),
+          Quantity: Number(item.quantity),
+        })),
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !submitting) {
           onClose();
         }
       }}
@@ -102,6 +105,7 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
             type="button"
             aria-label="Đóng"
             onClick={onClose}
+            disabled={submitting}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#526575] hover:bg-[#F7FBFF]"
           >
             <FiX aria-hidden="true" className="h-6 w-6" />
@@ -114,14 +118,14 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
             <span className="relative flex h-10 w-full items-center rounded-lg border border-[#DCECF8] bg-white">
               <select
                 required
-                value={room}
-                onChange={(event) => setRoom(event.target.value)}
+                value={roomId}
+                onChange={(event) => setRoomId(event.target.value)}
                 className="h-full w-full appearance-none rounded-lg bg-transparent px-4 pr-10 text-sm font-normal text-[#526575] outline-none"
               >
                 <option value="">Chọn phòng...</option>
                 {rooms.map((option) => (
-                  <option key={option.room} value={option.room}>
-                    {option.room} - {option.customer}
+                  <option key={option.RoomID} value={option.RoomID}>
+                    P.{option.RoomNumber} - {option.GuestName}
                   </option>
                 ))}
               </select>
@@ -132,12 +136,26 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
             </span>
           </label>
 
+          {rooms.length === 0 && (
+            <p className="text-xs text-[#D9534F]">
+              Hiện không có phòng nào đang có khách để ghi nhận dịch vụ.
+            </p>
+          )}
+
+          {services.length === 0 && (
+            <p className="text-xs text-[#D9534F]">
+              Chưa có dịch vụ trong danh mục.
+            </p>
+          )}
+
           <div className="flex flex-col gap-3">
             {items.map((item, index) => {
-              const service = serviceOptions.find(
-                (option) => option.name === item.serviceName,
+              const service = services.find(
+                (option) =>
+                  String(option.ServiceID) === String(item.serviceId),
               );
-              const lineTotal = (service?.price ?? 0) * Number(item.quantity || 0);
+              const lineTotal =
+                Number(service?.Price || 0) * Number(item.quantity || 0);
 
               return (
                 <div
@@ -150,16 +168,19 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
                       <select
                         required
                         aria-label={`Chọn dịch vụ dòng ${index + 1}`}
-                        value={item.serviceName}
+                        value={item.serviceId}
                         onChange={(event) =>
-                          updateItem(item.key, 'serviceName', event.target.value)
+                          updateItem(item.key, 'serviceId', event.target.value)
                         }
                         className="h-full w-full appearance-none rounded-lg bg-transparent px-4 pr-10 text-sm font-normal text-[#526575] outline-none"
                       >
                         <option value="">Chọn dịch vụ...</option>
-                        {serviceOptions.map((option) => (
-                          <option key={option.name} value={option.name}>
-                            {option.name}
+                        {services.map((option) => (
+                          <option
+                            key={option.ServiceID}
+                            value={option.ServiceID}
+                          >
+                            {option.ServiceName}
                           </option>
                         ))}
                       </select>
@@ -175,13 +196,15 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
                     <input
                       required
                       min="1"
+                      max="999"
+                      step="1"
                       type="number"
                       value={item.quantity}
                       onChange={(event) =>
                         updateItem(
                           item.key,
                           'quantity',
-                          Math.max(1, Number(event.target.value)),
+                          event.target.value,
                         )
                       }
                       className="h-10 w-full rounded-lg border border-[#DCECF8] bg-white px-4 text-sm font-normal text-[#526575] outline-none focus:border-[#0D8BEA]"
@@ -189,7 +212,9 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
                   </label>
 
                   <div className="flex min-w-0 flex-col gap-2 text-sm">
-                    <span className="font-bold text-[#075A9C]">THÀNH TIỀN</span>
+                    <span className="font-bold text-[#075A9C]">
+                      THÀNH TIỀN
+                    </span>
                     <div className="flex h-10 items-center justify-between rounded-lg border border-[#DCECF8] bg-white px-4 text-sm text-[#526575]">
                       <span>{formatNumber(lineTotal)}</span>
                       <span>VNĐ</span>
@@ -199,10 +224,12 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
                   <button
                     type="button"
                     aria-label={`Xóa dòng dịch vụ ${index + 1}`}
-                    disabled={items.length === 1}
+                    disabled={items.length === 1 || submitting}
                     onClick={() =>
                       setItems((currentItems) =>
-                        currentItems.filter((current) => current.key !== item.key),
+                        currentItems.filter(
+                          (current) => current.key !== item.key,
+                        ),
                       )
                     }
                     className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#DCECF8] bg-white text-[#D9534F] disabled:cursor-not-allowed disabled:opacity-40"
@@ -215,23 +242,18 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
 
             <button
               type="button"
-              onClick={() => setItems((currentItems) => [...currentItems, createEmptyItem()])}
-              className="self-start py-1 text-xs font-semibold text-[#0D8BEA]"
+              disabled={submitting}
+              onClick={() =>
+                setItems((currentItems) => [
+                  ...currentItems,
+                  createEmptyItem(),
+                ])
+              }
+              className="self-start py-1 text-xs font-semibold text-[#0D8BEA] disabled:opacity-50"
             >
               + Thêm món/dịch vụ
             </button>
           </div>
-
-          <label className="flex w-full flex-col gap-2 text-sm font-bold text-[#075A9C]">
-            GHI CHÚ
-            <textarea
-              rows={3}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="VD: Giao lên phòng lúc 14:00"
-              className="min-h-20 w-full resize-y rounded-lg border border-[#DCECF8] bg-white px-4 py-2 text-sm font-normal text-[#526575] outline-none placeholder:text-[#526575] focus:border-[#0D8BEA]"
-            />
-          </label>
         </div>
 
         <div className="flex shrink-0 items-center justify-end pt-3">
@@ -244,16 +266,22 @@ function AddServiceUsageModal({ rooms, onClose, onSubmit }) {
           <button
             type="button"
             onClick={onClose}
+            disabled={submitting}
             className="flex h-10 items-center justify-center rounded-lg border border-[#DCECF8] bg-[#F7FBFF] px-4 text-sm font-bold text-[#526575]"
           >
             Hủy bỏ
           </button>
           <button
             type="submit"
-            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white"
+            disabled={
+              submitting ||
+              rooms.length === 0 ||
+              services.length === 0
+            }
+            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             <FiPlus aria-hidden="true" className="h-4 w-4" />
-            Ghi nhận tất cả
+            {submitting ? 'Đang ghi nhận...' : 'Ghi nhận tất cả'}
           </button>
         </footer>
       </form>
