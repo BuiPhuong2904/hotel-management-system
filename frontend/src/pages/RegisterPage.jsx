@@ -15,7 +15,7 @@ import {
   FiSmartphone,
   FiUser,
 } from 'react-icons/fi';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import ToastNotification from '../components/ToastNotification';
 
 const hotelBenefits = [
@@ -83,6 +83,17 @@ function RegisterPage() {
   const [toast, setToast] = useState(null);
   const timeoutRef = useRef(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const loginLink = searchParams.has('redirect')
+    ? `/login?${new URLSearchParams({ redirect: searchParams.get('redirect') }).toString()}`
+    : '/login';
+
+  const getCustomerDestination = () => {
+    const redirect = searchParams.get('redirect');
+    return redirect?.startsWith('/') && !redirect.startsWith('//')
+      ? redirect
+      : '/customer';
+  };
 
   useEffect(
     () => () => {
@@ -163,9 +174,10 @@ function RegisterPage() {
         'registeredUsers',
         JSON.stringify([...registeredUsers, customer]),
       );
+      localStorage.setItem('customerUser', JSON.stringify(customer));
       localStorage.setItem(
         'user',
-        JSON.stringify({ role: 'customer', name: fullName.trim() }),
+        JSON.stringify(customer),
       );
     } catch {
       notify('Không thể lưu tài khoản vào trình duyệt này.', 'error');
@@ -175,14 +187,14 @@ function RegisterPage() {
     notify(
       'Đăng ký tài khoản thành công! Đang chuyển hướng...',
       'success',
-      '/customer',
+      getCustomerDestination(),
     );
   };
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#F8FAFC] lg:flex-row">
       <section
-        className="flex min-h-[680px] w-full flex-col justify-between bg-[#075A9C] bg-cover bg-center p-8 lg:sticky lg:top-0 lg:h-screen lg:w-1/2 lg:p-12"
+        className="flex min-h-170 w-full flex-col justify-between bg-[#075A9C] bg-cover bg-center p-8 lg:sticky lg:top-0 lg:h-screen lg:w-1/2 lg:p-12"
         style={{
           backgroundImage:
             "linear-gradient(125deg, rgb(7 90 156 / 88%), rgb(10 77 130 / 92%)), url('/images/login-hotel.jpeg')",
@@ -247,7 +259,7 @@ function RegisterPage() {
           </Link>
         </div>
 
-        <main className="my-auto mx-auto w-full max-w-[540px] py-6">
+        <main className="my-auto mx-auto w-full max-w-135 py-6">
           <div className="rounded-2xl border border-[#DCECF8] bg-white p-8 sm:p-10 shadow-[0_4px_8px_rgba(7,90,156,0.06)]">
             <h2 className="mb-5 text-center text-2xl font-bold text-[#075A9C]">
               Đăng ký tài khoản mới
@@ -399,7 +411,7 @@ function RegisterPage() {
             <p className="mt-5 border-t border-[#DCECF8] pt-5 text-center text-sm text-[#64748B]">
               Bạn đã có tài khoản Grand Hotel?{' '}
               <Link
-                to="/login"
+                to={loginLink}
                 className="font-bold text-[#0D8BEA] hover:underline"
               >
                 Đăng nhập ngay

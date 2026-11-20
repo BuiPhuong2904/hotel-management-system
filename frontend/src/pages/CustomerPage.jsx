@@ -258,7 +258,7 @@ function CustomerPage() {
           return (
             <article
               key={card.title}
-              className="flex h-[136px] min-w-0 flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
+              className="flex h-34 min-w-0 flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-4.25 shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
             >
               <h2 className="whitespace-nowrap text-sm font-bold" style={{ color: card.color }}>
                 {card.title}
@@ -287,7 +287,7 @@ function CustomerPage() {
 
       <div className="flex flex-col gap-3 rounded-xl border border-[#DCECF8] bg-white p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="flex min-w-0 gap-3">
-          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#DCECF8] bg-[#F7FBFF] px-3 sm:w-[369px] sm:flex-none">
+          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#DCECF8] bg-[#F7FBFF] px-3 sm:w-92.25 sm:flex-none">
             <FiSearch aria-hidden="true" className="h-4 w-4 shrink-0 text-[#526575]" />
             <input
               type="search"
@@ -355,7 +355,7 @@ function CustomerPage() {
         </header>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] table-fixed border-collapse">
+          <table className="w-full min-w-245 table-fixed border-collapse">
             <colgroup>
               <col style={{ width: '4%' }} />
               <col style={{ width: '18%' }} />
@@ -480,7 +480,7 @@ function CustomerPage() {
           </table>
         </div>
 
-        <footer className="flex min-h-[72px] flex-col items-center justify-center gap-1 px-4 py-3">
+        <footer className="flex min-h-18 flex-col items-center justify-center gap-1 px-4 py-3">
 
           <nav aria-label="Phân trang danh sách khách hàng" className="flex items-center gap-1">
             <button

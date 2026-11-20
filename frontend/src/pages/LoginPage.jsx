@@ -15,7 +15,7 @@ import {
   FiSmartphone,
   FiUser,
 } from 'react-icons/fi';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import ToastNotification from '../components/ToastNotification';
 
 const hotelBenefits = [
@@ -44,6 +44,25 @@ function LoginPage() {
   const [toast, setToast] = useState(null);
   const timeoutRef = useRef(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (!searchParams.get('redirect')?.startsWith('/booking')) return undefined;
+    const timer = window.setTimeout(() => {
+      setToast({ message: 'Vui lòng đăng nhập để tiếp tục hoàn tất đặt phòng', type: 'error' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
+  const getCustomerDestination = () => {
+    const redirect = searchParams.get('redirect');
+    return redirect?.startsWith('/') && !redirect.startsWith('//')
+      ? redirect
+      : '/customer';
+  };
+  const registerLink = searchParams.has('redirect')
+    ? `/register?${new URLSearchParams({ redirect: searchParams.get('redirect') }).toString()}`
+    : '/register';
 
   useEffect(
     () => () => {
@@ -77,35 +96,49 @@ function LoginPage() {
 
     const isStaff = /admin|staff/i.test(username);
     const role = isStaff ? 'staff' : 'customer';
-    localStorage.setItem(
-      'user',
-      JSON.stringify({ role, name: username.trim() }),
-    );
+    let customer = { role, name: username.trim(), fullName: username.trim() };
+    if (role === 'customer') {
+      try {
+        const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+        const registered = Array.isArray(registeredUsers)
+          ? registeredUsers.find((item) => item.username === username.trim())
+          : null;
+        if (registered) customer = registered;
+      } catch (error) {
+        console.error('Không thể đọc tài khoản khách hàng đã đăng ký.', error);
+      }
+      localStorage.setItem('customerUser', JSON.stringify(customer));
+    }
+    localStorage.setItem('user', JSON.stringify(customer));
     notify(
       'Đăng nhập thành công!',
       'success',
-      isStaff ? '/dashboard' : '/customer',
+      isStaff ? '/dashboard' : getCustomerDestination(),
     );
   };
 
   const enterDemo = (role) => {
     const isStaff = role === 'staff';
-    const name = isStaff ? 'Quản trị viên' : 'Nguyễn Văn A';
+    const name = isStaff ? 'Quản trị viên' : 'Nguyễn Minh Anh';
+    const customer = isStaff
+      ? { role, name }
+      : { role: 'customer', name, fullName: name, phone: '0912399121', email: 'minhanh.nguyen@email.com' };
 
-    localStorage.setItem('user', JSON.stringify({ role, name }));
+    if (!isStaff) localStorage.setItem('customerUser', JSON.stringify(customer));
+    localStorage.setItem('user', JSON.stringify(customer));
     notify(
       isStaff
         ? 'Đang truy cập giao diện Quản trị viên...'
         : 'Đang truy cập giao diện Khách hàng...',
       'success',
-      isStaff ? '/dashboard' : '/customer',
+      isStaff ? '/dashboard' : getCustomerDestination(),
     );
   };
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#F8FAFC] lg:flex-row">
       <section
-        className="flex min-h-[680px] w-full flex-col justify-between bg-[#075A9C] bg-cover bg-center p-8 lg:min-h-screen lg:w-1/2 lg:p-12"
+        className="flex min-h-170 w-full flex-col justify-between bg-[#075A9C] bg-cover bg-center p-8 lg:min-h-screen lg:w-1/2 lg:p-12"
         style={{
           backgroundImage:
             "linear-gradient(125deg, rgb(7 90 156 / 88%), rgb(10 77 130 / 92%)), url('/images/login-hotel.jpeg')",
@@ -294,7 +327,7 @@ function LoginPage() {
             <p className="mt-6 border-t border-[#DCECF8] pt-5 text-center text-sm text-[#64748B]">
               Bạn là khách hàng mới?{' '}
               <Link
-                to="/register"
+                to={registerLink}
                 className="font-bold text-[#0D8BEA] hover:underline"
               >
                 Đăng ký tài khoản

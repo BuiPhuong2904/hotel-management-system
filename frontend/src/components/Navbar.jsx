@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 function Navbar({ mobileOpen, onMenuClick }) {
   const { pathname } = useLocation();
   const pageTitle =
-    pathname === '/rooms'
+    pathname === '/room-management'
       ? 'QUẢN LÝ PHÒNG'
       : pathname === '/bookings'
         ? 'QUẢN LÝ ĐẶT PHÒNG'

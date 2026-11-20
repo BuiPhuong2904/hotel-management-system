@@ -15,7 +15,7 @@ import {
 
 const navigation = [
   { label: 'Tổng quan', icon: FiGrid, to: '/dashboard' },
-  { label: 'Quản lý phòng', icon: FiBriefcase, to: '/rooms' },
+  { label: 'Quản lý phòng', icon: FiBriefcase, to: '/room-management' },
   { label: 'Đặt phòng', icon: FiCalendar, to: '/bookings' },
   { label: 'Danh mục dịch vụ', icon: FiBookOpen, to: '/services' },
   { label: 'Dịch vụ phát sinh', icon: FiFileText, to: '/service-usage' },

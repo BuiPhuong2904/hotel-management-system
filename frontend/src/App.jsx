@@ -15,6 +15,11 @@ import LoginPage from './pages/LoginPage';
 import CustomerHomePage from './pages/CustomerHomePage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import RoomSearchPage from './pages/RoomSearchPage';
+import BookingInfoPage from './pages/BookingInfoPage';
+import BookingConfirmPage from './pages/BookingConfirmPage';
+import BookingSuccessPage from './pages/BookingSuccessPage';
+import MyBookingsPage from './pages/MyBookingsPage';
 
 function App() {
   return (
@@ -23,11 +28,19 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/rooms" element={<RoomSearchPage />} />
+        <Route path="/booking-info" element={<BookingInfoPage />} />
+        <Route path="/booking/info" element={<BookingInfoPage />} />
+        <Route path="/booking-confirm" element={<BookingConfirmPage />} />
+        <Route path="/booking/confirm" element={<BookingConfirmPage />} />
+        <Route path="/booking-success" element={<BookingSuccessPage />} />
+        <Route path="/booking/success" element={<BookingSuccessPage />} />
+        <Route path="/my-bookings" element={<MyBookingsPage />} />
         <Route path="/" element={<CustomerHomePage />} />
         <Route path="/customer" element={<CustomerHomePage />} />
         <Route path="/" element={<Layout />}>
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="rooms" element={<RoomPage />} />
+          <Route path="room-management" element={<RoomPage />} />
           <Route path="bookings" element={<BookingPage />} />
           <Route path="services" element={<ServicePage />} />
           <Route path="service-usage" element={<ServiceUsagePage />} />
