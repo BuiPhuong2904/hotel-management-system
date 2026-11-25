@@ -9,9 +9,10 @@ import {
   FiSearch,
   FiTrash2,
 } from 'react-icons/fi';
+import RoomTypeManager from '../components/RoomTypeManager';
 import RoomDetailDrawer from '../components/RoomDetailDrawer';
 
-import { createRoomAPI, deleteRoomAPI, getRoomsAPI, getRoomTypesAPI, updateRoomAPI, updateRoomStatusAPI } from '../services/roomService';
+import { updateRoomTypeAPI, createRoomAPI, deleteRoomAPI, getRoomsAPI, getRoomTypesAPI, updateRoomAPI, updateRoomStatusAPI } from '../services/roomService';
 
 const labels = { Available: 'Sẵn sàng', Occupied: 'Đang lưu trú', Cleaning: 'Đang dọn dẹp', Maintenance: 'Bảo trì' };
 const statusCode = (label) => Object.keys(labels).find((code) => labels[code] === label);
@@ -467,7 +468,8 @@ function DeleteRoomDialog({ room, busy, error, onClose, onConfirm }) {
 function RoomPage() {
   const [rooms, setRooms] = useState([]);
   const [floor, setFloor] = useState('all');
-  const [roomType, setRoomType] = useState('all');
+  const [roomType, setRoomType] = useState('');
+  const [manageTypes, setManageTypes] = useState(false);
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [roomDialog, setRoomDialog] = useState(null);
@@ -488,7 +490,7 @@ function RoomPage() {
   useEffect(() => {
     let active = true;
     const params = {};
-    if (roomType !== 'all') params.roomTypeId = roomType;
+    if (roomType !== '') params.roomTypeId = roomType;
     if (status !== 'all') params.status = statusCode(status);
     async function load() {
       setLoading(true);
@@ -501,7 +503,7 @@ function RoomPage() {
         if (active) {
           setRooms(filtered.data.map(toRoom));
           setAllRooms(full.data.map(toRoom));
-          setTypes(catalog.data);
+          setTypes(catalog.data.filter((type) => ['A', 'B', 'C'].includes(type.RoomTypeID)));
         }
       } catch (err) {
         if (active) setReadError(err.response?.data?.message || 'Không tải được danh sách phòng.');
@@ -521,7 +523,7 @@ function RoomPage() {
     const query = search.trim().toLocaleLowerCase('vi');
     return rooms.filter((room) => {
       const matchesFloor = floor === 'all' || room.floor === floor;
-      const matchesType = roomType === 'all' || room.type === roomType;
+      const matchesType = roomType === '' || room.type === roomType;
       const matchesStatus = status === 'all' || room.status === status;
       const matchesSearch =
         !query ||
@@ -535,7 +537,7 @@ function RoomPage() {
 
   const resetFilters = () => {
     setFloor('all');
-    setRoomType('all');
+    setRoomType('');
     setStatus('all');
     setSearch('');
   };
@@ -545,14 +547,15 @@ function RoomPage() {
     setBusy(true);
     setError('');
     try {
-      await action();
-      onSuccess?.();
+      const result = await action();
+      onSuccess?.(result);
       refresh((v) => v + 1);
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể lưu thay đổi.');
       if (err.response?.status === 401) {
         sessionStorage.removeItem('roomToken');
         sessionStorage.removeItem('roomRole');
+        setManageTypes(false);
         setRoomDialog(null);
         setDeletingRoom(null);
       }
@@ -569,6 +572,31 @@ function RoomPage() {
   };
 
   const confirmDelete = () => mutate(() => deleteRoomAPI(deletingRoom.id), () => setDeletingRoom(null));
+
+  function saveType(id, fields, done) {
+    return mutate(() => updateRoomTypeAPI(id, fields), ({ data }) => {
+      setTypes((current) => current.map((type) => type.RoomTypeID === id ? data : type));
+      done();
+    });
+  }
+
+  function openNewRoom() {
+    if (!role) {
+      window.location.assign('/login?redirect=/room-management');
+      return;
+    }
+    if (!admin) {
+      setError('Chỉ tài khoản Admin được thêm phòng.');
+      return;
+    }
+    if (readError || !types.length) {
+      setError('Chưa tải được hạng phòng A, B, C. Đang tải lại danh mục.');
+      refresh((value) => value + 1);
+      return;
+    }
+    setError('');
+    setRoomDialog({ room: null });
+  }
 
   const exportRooms = () => {
     const rows = [
@@ -602,7 +630,7 @@ function RoomPage() {
       {!canChangeStatus && <a className="text-blue-700 underline" href="/login?redirect=/room-management">Đăng nhập để quản lý phòng</a>}
       {loading && <p role="status">Đang tải phòng…</p>}
       {readError && <p role="alert">{readError} <button onClick={() => refresh((v) => v + 1)}>Thử lại</button></p>}
-      {error && !roomDialog && !deletingRoom && <p role="alert">{error}</p>}
+      {error && !manageTypes && !roomDialog && !deletingRoom && <p role="alert">{error}</p>}
       <section
         aria-label="Tổng quan tình trạng phòng"
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5 xl:gap-4"
@@ -636,7 +664,7 @@ function RoomPage() {
               value={roomType}
               onChange={setRoomType}
               options={[
-                { label: 'Tất cả', value: 'all' },
+                { label: 'Tất cả', value: '' },
                 ...types.map(({ RoomTypeID: value, TypeName }) => ({
                   label: TypeName,
                   value,
@@ -705,6 +733,9 @@ function RoomPage() {
             />
           </label>
           <div className="flex flex-wrap justify-end gap-3 xl:gap-6">
+            {admin && <button type="button" disabled={busy || loading || Boolean(readError)}
+              className="rounded-lg border border-[#DCECF8] bg-white px-4 py-2 text-sm font-bold text-[#075A9C]"
+              onClick={() => { setError(''); setManageTypes(true); }}>Quản lý hạng phòng</button>}
             <button
               type="button"
               onClick={exportRooms}
@@ -715,8 +746,8 @@ function RoomPage() {
             </button>
             <button
               type="button"
-              disabled={!admin || busy || !types.length}
-              onClick={() => { setError(''); setRoomDialog({ room: null }); }}
+              disabled={busy || loading}
+              onClick={openNewRoom}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white hover:bg-[#075A9C]"
             >
               <FiPlus aria-hidden="true" className="h-4 w-4" />
@@ -876,6 +907,10 @@ function RoomPage() {
         </div>
       </section>
 
+      {admin && manageTypes && (
+        <RoomTypeManager types={types} busy={busy} error={error} clearError={() => setError('')}
+          onClose={() => { setError(''); setManageTypes(false); }} onSave={saveType} />
+      )}
       {roomDialog && (
         <RoomFormDialog
           key={roomDialog.room?.id ?? 'new'}

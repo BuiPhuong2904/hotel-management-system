@@ -151,6 +151,33 @@ test('Phân quyền và dữ liệu không hợp lệ', async () => {
   assert.equal((await request('GET', '/rooms/999999')).status, 404);
 });
 
+test('danh mục hạng và dữ liệu phòng phản ánh thay đổi của Admin', async () => {
+  const path = '/room-types/CAT3';
+  const type = { RoomTypeID: 'CAT3', TypeName: 'Hạng mới', BasePrice: 250000, StandardGuests: 2, MaxGuests: 3 };
+  const admin = { token: adminToken };
+  const staff = { token: staffToken };
+  assert.equal((await request('POST', '/room-types', { ...staff, body: type })).status, 403);
+  assert.equal((await request('POST', '/room-types', { ...admin, body: type })).status, 201);
+  const room = await request('POST', '/rooms', { ...admin, body: { RoomNumber: 'CAT301', RoomTypeID: type.RoomTypeID } });
+  assert.equal(room.status, 201);
+  const changes = { TypeName: 'Hạng cập nhật', BasePrice: 300000, MaxGuests: 4 };
+  assert.equal((await request('PUT', path, { ...staff, body: changes })).status, 403);
+  assert.equal((await request('PUT', path, { ...admin, body: changes })).status, 200);
+  const catalog = await request('GET', '/room-types');
+  const updated = catalog.body.data.find((entry) => entry.RoomTypeID === type.RoomTypeID);
+  assert.equal(updated.TypeName, changes.TypeName);
+  const filtered = await request('GET', '/rooms?roomTypeId=CAT3');
+  assert.equal(filtered.body.data.length, 1);
+  assert.equal(Number(filtered.body.data[0].BasePrice), changes.BasePrice);
+  assert.equal(filtered.body.data[0].MaxGuests, changes.MaxGuests);
+  assert.equal((await request('DELETE', path, staff)).status, 403);
+  assert.equal((await request('DELETE', path, admin)).status, 409);
+  assert.equal((await request('DELETE', `/rooms/${room.body.data.RoomID}`, admin)).status, 200);
+  assert.equal((await request('DELETE', path, admin)).status, 200);
+  const remaining = await request('GET', '/room-types');
+  assert.ok(!remaining.body.data.some((entry) => entry.RoomTypeID === type.RoomTypeID));
+});
+
 test('roomService dùng API thật cho vòng đời phòng và quyền lễ tân', async (t) => {
   const service = await import('../../../frontend/src/services/roomService.js');
   const { default: client } = await import('../../../frontend/src/services/apiClient.js');

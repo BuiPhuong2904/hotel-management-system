@@ -31,3 +31,7 @@ export async function updateRoomStatusAPI(id, status) {
 export async function deleteRoomAPI(id) {
   return (await apiClient.delete(`/rooms/${id}`, writeConfig())).data;
 }
+
+export async function updateRoomTypeAPI(id, changes) {
+  return (await apiClient.put(`/room-types/${encodeURIComponent(id)}`, changes, writeConfig())).data;
+}
