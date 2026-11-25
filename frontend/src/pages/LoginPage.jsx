@@ -16,6 +16,7 @@ import {
   FiUser,
 } from 'react-icons/fi';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import apiClient from '../services/apiClient';
 import ToastNotification from '../components/ToastNotification';
 
 const hotelBenefits = [
@@ -83,7 +84,7 @@ function LoginPage() {
     }, destination ? 800 : 3000);
   };
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
 
     if (!username.trim() || !password.trim()) {
@@ -91,6 +92,26 @@ function LoginPage() {
         'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!',
         'error',
       );
+      return;
+    }
+
+    sessionStorage.removeItem('roomToken');
+    sessionStorage.removeItem('roomRole');
+    if (searchParams.get('redirect') === '/room-management') {
+      try {
+        const { data } = await apiClient.post('/auth/login', { Username: username.trim(), Password: password });
+        const { user, token } = data.data;
+        if (!['Admin', 'Staff'].includes(user.Role)) {
+          notify('Cần tài khoản quản trị hoặc lễ tân để quản lý phòng.', 'error');
+          return;
+        }
+        sessionStorage.setItem('roomToken', token);
+        sessionStorage.setItem('roomRole', user.Role);
+        localStorage.setItem('user', JSON.stringify({ role: 'staff', name: user.FullName }));
+        navigate('/room-management');
+      } catch (error) {
+        notify(error.response?.data?.message || 'Không thể đăng nhập.', 'error');
+      }
       return;
     }
 
@@ -118,6 +139,8 @@ function LoginPage() {
   };
 
   const enterDemo = (role) => {
+    sessionStorage.removeItem('roomToken');
+    sessionStorage.removeItem('roomRole');
     const isStaff = role === 'staff';
     const name = isStaff ? 'Quản trị viên' : 'Nguyễn Minh Anh';
     const customer = isStaff

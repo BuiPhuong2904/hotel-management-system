@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiChevronLeft,
   FiChevronRight,
@@ -11,64 +11,18 @@ import {
 } from 'react-icons/fi';
 import RoomDetailDrawer from '../components/RoomDetailDrawer';
 
-const initialRooms = [
-  {
-    id: 1,
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    price: 150000,
-    capacity: 3,
-    status: 'Đang lưu trú',
-    note: 'Nguyễn Văn A - Đã thanh toán',
-    guestName: 'Nguyễn Văn A',
-    guestPhone: '0912345678',
-    checkInTime: '14:00 - Hôm qua',
-    expectedCheckOut: '29/10/2026',
-  },
-  {
-    id: 2,
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    price: 150000,
-    capacity: 3,
-    status: 'Sẵn sàng',
-    note: 'Không có',
-  },
-  {
-    id: 3,
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    price: 150000,
-    capacity: 3,
-    status: 'Đang dọn dẹp',
-    note: 'Không có',
-  },
-  {
-    id: 4,
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    price: 150000,
-    capacity: 3,
-    status: 'Bảo trì',
-    note: 'Không có',
-  },
-  {
-    id: 5,
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    price: 150000,
-    capacity: 3,
-    status: 'Sẵn sàng',
-    note: 'Không có',
-  },
-];
+import { createRoomAPI, deleteRoomAPI, getRoomsAPI, getRoomTypesAPI, updateRoomAPI, updateRoomStatusAPI } from '../services/roomService';
+
+const labels = { Available: 'Sẵn sàng', Occupied: 'Đang lưu trú', Cleaning: 'Đang dọn dẹp', Maintenance: 'Bảo trì' };
+const statusCode = (label) => Object.keys(labels).find((code) => labels[code] === label);
+const toRoom = (row) => ({
+  id: row.RoomID, number: row.RoomNumber, type: row.RoomTypeID,
+  floor: /^([0-9]+)[0-9]{2}$/.test(row.RoomNumber) ? 'T' + row.RoomNumber.slice(0, -2) : '',
+  price: Number(row.BasePrice), capacity: row.MaxGuests, note: row.Note || '', status: labels[row.Status],
+});
 
 const roomStatuses = [
+  { value: 'Đang lưu trú', subtitle: 'Có khách', color: '#0D8BEA', text: '#0D8BEA', subtitleColor: '#0D8BEA' },
   {
     value: 'Sẵn sàng',
     subtitle: 'Đón khách ngay',
@@ -99,41 +53,10 @@ const roomStatusColors = {
   'Bảo trì': '#D9534F',
 };
 
-const summaryCards = [
-  {
-    title: 'TỔNG SỐ PHÒNG',
-    value: '48',
-    description: 'Quy mô cơ sở',
-    color: '#075A9C',
-  },
-  {
-    title: 'CÒN TRỐNG',
-    value: '08',
-    description: 'Sẵn sàng đón khách',
-    color: '#2E8B57',
-    progress: 16.59,
-  },
-  {
-    title: 'ĐANG LƯU TRÚ',
-    value: '36',
-    description: '75.0% lấp đầy',
-    color: '#0D8BEA',
-    progress: 75.01,
-  },
-  {
-    title: 'CẦN DỌN DẸP',
-    value: '03',
-    description: 'Đang xử lý',
-    color: '#D97706',
-    progress: 6.25,
-  },
-  {
-    title: 'BẢO TRÌ',
-    value: '01',
-    description: 'Phòng 402',
-    color: '#D9534F',
-    progress: 3.1,
-  },
+const cards = [
+  ['TỔNG SỐ PHÒNG', null, '#075A9C'], ['CÒN TRỐNG', 'Available', '#2E8B57'],
+  ['ĐANG LƯU TRÚ', 'Occupied', '#0D8BEA'], ['CẦN DỌN DẸP', 'Cleaning', '#D97706'],
+  ['BẢO TRÌ', 'Maintenance', '#D9534F'],
 ];
 
 const formatPrice = (price) => new Intl.NumberFormat('vi-VN').format(price);
@@ -224,7 +147,7 @@ function RoomStatusOptions({ value, onChange, isEditing }) {
       <legend className="text-sm font-bold text-[#075A9C]">
         {isEditing ? 'TRẠNG THÁI HIỆN TẠI' : 'TRẠNG THÁI KHỞI TẠO'}
       </legend>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-[160px_166px_165px] lg:gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         {roomStatuses.map((status) => {
           const selected = value === status.value;
           const radioAsset =
@@ -289,28 +212,25 @@ function RoomStatusOptions({ value, onChange, isEditing }) {
   );
 }
 
-function RoomFormDialog({ room, onClose, onSave }) {
+function RoomFormDialog({ room, types, busy, error, onClose, onSave }) {
   const isEditing = Boolean(room);
   const [form, setForm] = useState(
     room
       ? {
           number: room.number,
           type: room.type,
-          capacity: String(room.capacity),
-          price: String(room.price),
           status: room.status,
           note: room.note,
         }
       : {
           number: '',
           type: '',
-          capacity: '3',
-          price: '150000',
           status: 'Sẵn sàng',
           note: '',
         },
   );
 
+  const selectedType = types.find((type) => type.RoomTypeID === form.type);
   const updateField = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
@@ -319,16 +239,12 @@ function RoomFormDialog({ room, onClose, onSave }) {
   const handleSubmit = (event) => {
     event.preventDefault();
     const number = form.number.trim();
-    const floorNumber = number.match(/\d/)?.[0];
 
     onSave({
       number,
-      floor: floorNumber ? `T${floorNumber}` : '',
       type: form.type,
-      capacity: Number(form.capacity),
-      price: Number(form.price),
       status: form.status,
-      note: form.note.trim() || 'Không có',
+      note: form.note.trim(),
     });
   };
 
@@ -374,6 +290,7 @@ function RoomFormDialog({ room, onClose, onSave }) {
             <input
               autoFocus
               required
+              maxLength={10}
               name="number"
               value={form.number}
               onChange={updateField}
@@ -395,9 +312,9 @@ function RoomFormDialog({ room, onClose, onSave }) {
                 <option value="" disabled>
                   Chọn loại phòng...
                 </option>
-                {['A', 'B', 'C'].map((type) => (
-                  <option key={type} value={type}>
-                    {type}
+                {types.map((type) => (
+                  <option key={type.RoomTypeID} value={type.RoomTypeID}>
+                    {type.TypeName}
                   </option>
                 ))}
               </select>
@@ -418,8 +335,8 @@ function RoomFormDialog({ room, onClose, onSave }) {
                 type="number"
                 min="1"
                 name="capacity"
-                value={form.capacity}
-                onChange={updateField}
+                value={selectedType?.MaxGuests ?? ''}
+                readOnly
                 className="h-10 w-full rounded-lg border border-transparent bg-[#E8F5FF] px-4 py-2 text-sm font-normal text-[#526575] outline-none focus:border-[#0D8BEA]"
               />
             </label>
@@ -431,11 +348,8 @@ function RoomFormDialog({ room, onClose, onSave }) {
                   type="text"
                   inputMode="numeric"
                   name="price"
-                  value={form.price ? formatPrice(Number(form.price)) : ''}
-                  onChange={(event) => {
-                    const digits = event.target.value.replace(/\D/g, '');
-                    setForm((current) => ({ ...current, price: digits }));
-                  }}
+                  value={selectedType ? formatPrice(selectedType.BasePrice) : ''}
+                  readOnly
                   aria-label="ĐƠN GIÁ"
                   className="min-w-0 flex-1 bg-transparent outline-none"
                 />
@@ -444,11 +358,11 @@ function RoomFormDialog({ room, onClose, onSave }) {
             </label>
           </div>
 
-          <RoomStatusOptions
+          {!isEditing && <RoomStatusOptions
             isEditing={isEditing}
             value={form.status}
             onChange={(status) => setForm((current) => ({ ...current, status }))}
-          />
+          />}
 
           <label className="flex w-full flex-col gap-2 text-sm font-bold text-[#075A9C]">
             GHI CHÚ TIỆN ÍCH
@@ -463,6 +377,7 @@ function RoomFormDialog({ room, onClose, onSave }) {
           </label>
         </div>
 
+        {error && <p role="alert">{error}</p>}
         <footer className="mt-auto flex w-full shrink-0 items-center justify-end gap-4 border-t border-[#DCECF8] pt-4">
           <button
             type="button"
@@ -472,7 +387,7 @@ function RoomFormDialog({ room, onClose, onSave }) {
             Hủy bỏ
           </button>
           <button
-            type="submit"
+            type="submit" disabled={busy}
             className={`flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#075A9C] ${
               isEditing ? 'w-[132px]' : 'w-[143px]'
             }`}
@@ -500,7 +415,7 @@ function RoomFormDialog({ room, onClose, onSave }) {
   );
 }
 
-function DeleteRoomDialog({ room, onClose, onConfirm }) {
+function DeleteRoomDialog({ room, busy, error, onClose, onConfirm }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.2)] p-4"
@@ -526,6 +441,7 @@ function DeleteRoomDialog({ room, onClose, onConfirm }) {
             thể hoàn tác.
           </p>
         </div>
+        {error && <p role="alert">{error}</p>}
         <div className="flex w-full items-center justify-end gap-4">
           <button
             type="button"
@@ -536,6 +452,7 @@ function DeleteRoomDialog({ room, onClose, onConfirm }) {
           </button>
           <button
             type="button"
+            disabled={busy}
             onClick={onConfirm}
             className="flex h-[35px] w-[106px] items-center justify-center rounded-lg bg-[#D9534F] px-4 py-2 text-sm font-bold text-white hover:bg-[#D9534F]"
           >
@@ -548,14 +465,57 @@ function DeleteRoomDialog({ room, onClose, onConfirm }) {
 }
 
 function RoomPage() {
-  const [rooms, setRooms] = useState(initialRooms);
+  const [rooms, setRooms] = useState([]);
   const [floor, setFloor] = useState('all');
-  const [roomType, setRoomType] = useState('A');
+  const [roomType, setRoomType] = useState('all');
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [roomDialog, setRoomDialog] = useState(null);
   const [deletingRoom, setDeletingRoom] = useState(null);
   const [viewingRoom, setViewingRoom] = useState(null);
+
+  const [types, setTypes] = useState([]);
+  const [allRooms, setAllRooms] = useState([]);
+  const [revision, refresh] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState('');
+  const role = sessionStorage.getItem('roomToken') && sessionStorage.getItem('roomRole');
+  const admin = role === 'Admin';
+  const canChangeStatus = admin || role === 'Staff';
+
+  useEffect(() => {
+    let active = true;
+    const params = {};
+    if (roomType !== 'all') params.roomTypeId = roomType;
+    if (status !== 'all') params.status = statusCode(status);
+    async function load() {
+      setLoading(true);
+      setReadError('');
+      try {
+        const all = getRoomsAPI();
+        const [full, filtered, catalog] = await Promise.all([
+          all, Object.keys(params).length ? getRoomsAPI(params) : all, getRoomTypesAPI(),
+        ]);
+        if (active) {
+          setRooms(filtered.data.map(toRoom));
+          setAllRooms(full.data.map(toRoom));
+          setTypes(catalog.data);
+        }
+      } catch (err) {
+        if (active) setReadError(err.response?.data?.message || 'Không tải được danh sách phòng.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [roomType, status, revision]);
+  const summaryCards = cards.map(([title, code, color]) => {
+    const value = code ? allRooms.filter((r) => r.status === labels[code]).length : allRooms.length;
+    return { title, color, value, progress: code && allRooms.length ? Math.round(value * 100 / allRooms.length) : undefined };
+  });
 
   const filteredRooms = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('vi');
@@ -575,36 +535,40 @@ function RoomPage() {
 
   const resetFilters = () => {
     setFloor('all');
-    setRoomType('A');
+    setRoomType('all');
     setStatus('all');
     setSearch('');
   };
 
-  const saveRoom = (roomData) => {
-    if (roomDialog?.room) {
-      setRooms((currentRooms) =>
-        currentRooms.map((room) =>
-          room.id === roomDialog.room.id
-            ? { ...room, ...roomData }
-            : room,
-        ),
-      );
-    } else {
-      setRooms((currentRooms) => [
-        ...currentRooms,
-        { id: Date.now(), ...roomData },
-      ]);
+  async function mutate(action, onSuccess) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      onSuccess?.();
+      refresh((v) => v + 1);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể lưu thay đổi.');
+      if (err.response?.status === 401) {
+        sessionStorage.removeItem('roomToken');
+        sessionStorage.removeItem('roomRole');
+        setRoomDialog(null);
+        setDeletingRoom(null);
+      }
+    } finally {
+      setBusy(false);
     }
-    setRoomDialog(null);
+  }
+
+  const saveRoom = (form) => {
+    const body = { RoomNumber: form.number, RoomTypeID: form.type, Note: form.note };
+    return mutate(() => roomDialog.room
+      ? updateRoomAPI(roomDialog.room.id, body)
+      : createRoomAPI({ ...body, Status: statusCode(form.status) }), () => setRoomDialog(null));
   };
 
-  const confirmDelete = () => {
-    if (!deletingRoom) return;
-    setRooms((currentRooms) =>
-      currentRooms.filter((room) => room.id !== deletingRoom.id),
-    );
-    setDeletingRoom(null);
-  };
+  const confirmDelete = () => mutate(() => deleteRoomAPI(deletingRoom.id), () => setDeletingRoom(null));
 
   const exportRooms = () => {
     const rows = [
@@ -635,6 +599,10 @@ function RoomPage() {
 
   return (
     <section className="-mt-2 flex w-full flex-1 flex-col gap-6 min-w-0 bg-[#F7FBFF]">
+      {!canChangeStatus && <a className="text-blue-700 underline" href="/login?redirect=/room-management">Đăng nhập để quản lý phòng</a>}
+      {loading && <p role="status">Đang tải phòng…</p>}
+      {readError && <p role="alert">{readError} <button onClick={() => refresh((v) => v + 1)}>Thử lại</button></p>}
+      {error && !roomDialog && !deletingRoom && <p role="alert">{error}</p>}
       <section
         aria-label="Tổng quan tình trạng phòng"
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5 xl:gap-4"
@@ -656,7 +624,7 @@ function RoomPage() {
               onChange={setFloor}
               options={[
                 { label: 'Tất cả', value: 'all' },
-                ...['T1', 'T2', 'T3', 'T4'].map((value) => ({
+                ...[...new Set(allRooms.map((room) => room.floor).filter(Boolean))].map((value) => ({
                   label: value,
                   value,
                 })),
@@ -669,8 +637,8 @@ function RoomPage() {
               onChange={setRoomType}
               options={[
                 { label: 'Tất cả', value: 'all' },
-                ...['A', 'B', 'C'].map((value) => ({
-                  label: `Loại ${value}`,
+                ...types.map(({ RoomTypeID: value, TypeName }) => ({
+                  label: TypeName,
                   value,
                 })),
               ]}
@@ -747,7 +715,8 @@ function RoomPage() {
             </button>
             <button
               type="button"
-              onClick={() => setRoomDialog({ room: null })}
+              disabled={!admin || busy || !types.length}
+              onClick={() => { setError(''); setRoomDialog({ room: null }); }}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white hover:bg-[#075A9C]"
             >
               <FiPlus aria-hidden="true" className="h-4 w-4" />
@@ -800,7 +769,7 @@ function RoomPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredRooms.map((room, index) => (
+              {!loading && !readError && filteredRooms.map((room, index) => (
                 <tr
                   key={room.id}
                   className={`h-12 border-b border-[#DCECF8] transition-colors hover:bg-[#F7FBFF] ${
@@ -815,12 +784,13 @@ function RoomPage() {
                   </td>
                   <td className="px-4 text-center text-[#526575]">{room.capacity}</td>
                   <td className="px-4 text-center">
-                    <span
-                      className="inline-flex h-[25px] items-center justify-center whitespace-nowrap rounded-full px-2.5 text-sm text-white"
-                      style={{ backgroundColor: roomStatusColors[room.status] }}
-                    >
-                      {room.status}
-                    </span>
+                    <select aria-label={`Trạng thái phòng ${room.number}`} disabled={!canChangeStatus || busy || loading}
+                      value={statusCode(room.status)} onChange={(event) => {
+                        const next = event.target.value;
+                        mutate(() => updateRoomStatusAPI(room.id, next));
+                      }}>
+                      {Object.entries(labels).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                    </select>
                   </td>
                   <td className="max-w-0 truncate px-4 text-[#526575]">{room.note}</td>
                   <td className="px-3">
@@ -838,7 +808,8 @@ function RoomPage() {
                         type="button"
                         aria-label={`Sửa phòng ${room.number}`}
                         title="Sửa phòng"
-                        onClick={() => setRoomDialog({ room })}
+                        disabled={!admin || busy}
+                        onClick={() => { setError(''); setRoomDialog({ room }); }}
                         className="rounded p-1 text-[#0D8BEA] hover:bg-[#E8F5FF]"
                       >
                         <FiEdit2 aria-hidden="true" className="h-4 w-4" />
@@ -847,7 +818,8 @@ function RoomPage() {
                         type="button"
                         aria-label={`Xóa phòng ${room.number}`}
                         title="Xóa phòng"
-                        onClick={() => setDeletingRoom(room)}
+                        disabled={!admin || busy}
+                        onClick={() => { setError(''); setDeletingRoom(room); }}
                         className="rounded p-1 text-[#D9534F] hover:bg-[#F7FBFF]"
                       >
                         <FiTrash2 aria-hidden="true" className="h-4 w-4" />
@@ -856,7 +828,7 @@ function RoomPage() {
                   </td>
                 </tr>
               ))}
-              {filteredRooms.length === 0 && (
+              {!loading && !readError && filteredRooms.length === 0 && (
                 <tr>
                   <td
                     colSpan={8}
@@ -907,15 +879,15 @@ function RoomPage() {
       {roomDialog && (
         <RoomFormDialog
           key={roomDialog.room?.id ?? 'new'}
-          room={roomDialog.room}
-          onClose={() => setRoomDialog(null)}
+          room={roomDialog.room} types={types} busy={busy} error={error}
+          onClose={() => !busy && setRoomDialog(null)}
           onSave={saveRoom}
         />
       )}
       {deletingRoom && (
         <DeleteRoomDialog
-          room={deletingRoom}
-          onClose={() => setDeletingRoom(null)}
+          room={deletingRoom} busy={busy} error={error}
+          onClose={() => !busy && setDeletingRoom(null)}
           onConfirm={confirmDelete}
         />
       )}
@@ -924,7 +896,7 @@ function RoomPage() {
           key={viewingRoom.id}
           room={viewingRoom}
           onClose={() => setViewingRoom(null)}
-          onEdit={(room) => setRoomDialog({ room })}
+          onEdit={admin ? (room) => { setError(''); setRoomDialog({ room }); } : undefined}
         />
       )}
     </section>

@@ -93,6 +93,12 @@ function Sidebar({ mobileOpen = false, onNavigate }) {
         </Link>
 
         <button
+          onClick={() => {
+            sessionStorage.removeItem('roomToken');
+            sessionStorage.removeItem('roomRole');
+            localStorage.removeItem('user');
+            window.location.assign('/login');
+          }}
           type="button"
           className="flex min-h-10 w-full items-center justify-between rounded-lg border border-[#D9534F] px-3 text-sm font-semibold text-[#D9534F] hover:bg-[#FDF2F2]"
         >
