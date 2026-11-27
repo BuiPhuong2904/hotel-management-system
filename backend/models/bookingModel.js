@@ -76,7 +76,12 @@ const insertBooking = async (conn, booking, details) => {
     ]
   );
   const bookingId = result.insertId;
+  await insertDetails(conn, bookingId, details);
+  return bookingId;
+};
 
+// Ghi các phòng của một đơn (và khách nếu có)
+const insertDetails = async (conn, bookingId, details) => {
   for (const d of details) {
     const [detailResult] = await conn.query(
       `INSERT INTO BookingDetails (BookingID, RoomID, PriceAtBooking, ActualCheckIn,
@@ -105,7 +110,6 @@ const insertBooking = async (conn, booking, details) => {
       );
     }
   }
-  return bookingId;
 };
 
 const BookingModel = {
@@ -265,6 +269,120 @@ const BookingModel = {
         Guests: guests.filter((g) => g.DetailID === d.DetailID),
       })),
     };
+  },
+
+  // DANH SÁCH ĐƠN cho Lễ tân/Admin
+  async list({ status, q, from, to } = {}) {
+    let sql = `SELECT ${BOOKING_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}
+               FROM Bookings b WHERE 1 = 1`;
+    const params = [];
+    if (status) {
+      sql += ' AND b.Status = ?';
+      params.push(status);
+    }
+    if (from && to) {
+      sql += ' AND b.ExpectedCheckIn < ? AND b.ExpectedCheckOut > ?';
+      params.push(to, from);
+    }
+    if (q) {
+      sql += ` AND (b.GuestName LIKE ? OR b.GuestPhone LIKE ? OR CAST(b.BookingID AS CHAR) = ?
+                    OR EXISTS (SELECT 1 FROM BookingDetails d JOIN Rooms r ON r.RoomID = d.RoomID
+                               WHERE d.BookingID = b.BookingID AND r.RoomNumber LIKE ?))`;
+      params.push(`%${q}%`, `%${q}%`, q, `%${q}%`);
+    }
+    sql += ' ORDER BY b.ExpectedCheckIn DESC, b.BookingID DESC LIMIT 500';
+    const [bookings] = await db.query(sql, params);
+    if (bookings.length === 0) return [];
+
+    const [details] = await db.query(
+      `SELECT bd.BookingID, bd.DetailID, bd.RoomID, r.RoomNumber, r.RoomTypeID,
+              bd.GuestCount, bd.HasForeigner, bd.PriceAtBooking, bd.SubTotal, bd.TimeSurcharge
+       FROM BookingDetails bd
+       JOIN Rooms r ON r.RoomID = bd.RoomID
+       WHERE bd.BookingID IN (?)
+       ORDER BY bd.DetailID`,
+      [bookings.map((b) => b.BookingID)]
+    );
+    return bookings.map((b) => {
+      const rooms = details
+        .filter((d) => d.BookingID === b.BookingID)
+        .map((d) => ({ ...d, HasForeigner: Boolean(d.HasForeigner) }));
+      return {
+        ...b,
+        Rooms: rooms,
+        EstimatedTotal: rooms.reduce((sum, d) => sum + Number(d.SubTotal), 0),
+      };
+    });
+  },
+
+  // SỬA ĐƠN chưa nhận phòng
+  async update(bookingId, { booking, details }) {
+    return withTransaction(async (conn) => {
+      const [rows] = await conn.query('SELECT Status FROM Bookings WHERE BookingID = ? FOR UPDATE', [
+        bookingId,
+      ]);
+      if (!rows[0] || !['Pending', 'Confirmed'].includes(rows[0].Status)) {
+        throw modelError('BOOKING_STATE');
+      }
+
+      const roomIds = details.map((d) => d.RoomID);
+      const locked = await lockRooms(conn, roomIds);
+      const unavailable = missingOrMaintenance(roomIds, locked);
+      (
+        await findConflicts(conn, roomIds, booking.ExpectedCheckIn, booking.ExpectedCheckOut, bookingId)
+      ).forEach((id) => unavailable.add(id));
+      if (unavailable.size > 0) throw modelError('ROOMS_UNAVAILABLE', [...unavailable]);
+
+      await conn.query(
+        `UPDATE Bookings
+         SET GuestName = ?, GuestPhone = ?, ExpectedCheckIn = ?, ExpectedCheckOut = ?,
+             PromoID = ?, Note = ?
+         WHERE BookingID = ?`,
+        [
+          booking.GuestName,
+          booking.GuestPhone,
+          booking.ExpectedCheckIn,
+          booking.ExpectedCheckOut,
+          booking.PromoID ?? null,
+          booking.Note,
+          bookingId,
+        ]
+      );
+      await conn.query('DELETE FROM BookingDetails WHERE BookingID = ?', [bookingId]);
+      await insertDetails(conn, bookingId, details);
+    });
+  },
+
+  // GHI DANH SÁCH KHÁCH của một phòng trong đơn
+  async replaceGuests(bookingId, detailId, guests, counts) {
+    return withTransaction(async (conn) => {
+      const [rows] = await conn.query('SELECT Status FROM Bookings WHERE BookingID = ? FOR UPDATE', [
+        bookingId,
+      ]);
+      const status = rows[0] && rows[0].Status;
+      if (status !== 'Confirmed' && status !== 'CheckedIn') throw modelError('BOOKING_STATE');
+
+      const [detail] = await conn.query(
+        'SELECT DetailID FROM BookingDetails WHERE DetailID = ? AND BookingID = ?',
+        [detailId, bookingId]
+      );
+      if (!detail[0]) throw modelError('DETAIL_NOT_FOUND');
+
+      await conn.query('DELETE FROM RoomGuests WHERE DetailID = ?', [detailId]);
+      for (const g of guests) {
+        await conn.query(
+          `INSERT INTO RoomGuests (DetailID, FullName, IdentityNumber, CustomerType, Address)
+           VALUES (?, ?, ?, ?, ?)`,
+          [detailId, g.FullName, g.IdentityNumber, g.CustomerType, g.Address]
+        );
+      }
+      if (status === 'CheckedIn') {
+        await conn.query(
+          'UPDATE BookingDetails SET GuestCount = ?, HasForeigner = ?, SubTotal = ? WHERE DetailID = ?',
+          [counts.GuestCount, counts.HasForeigner, counts.SubTotal, detailId]
+        );
+      }
+    });
   },
 
   // Các đơn của một tài khoản (mới nhất trước)

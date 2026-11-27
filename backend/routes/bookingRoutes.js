@@ -11,9 +11,13 @@ router.post('/online', requireRole('Customer'), bookingController.createOnlineBo
 router.get('/my', requireRole('Customer'), bookingController.getMyBookings);
 
 // ---- Lễ tân và Admin ----
+router.get('/', requireRole('Admin', 'Staff'), receptionController.listBookings);
+router.post('/reserve', requireRole('Admin', 'Staff'), receptionController.createReservation);
 router.post('/direct', requireRole('Admin', 'Staff'), receptionController.createDirectBooking);
 router.patch('/:id/confirm-deposit', requireRole('Admin', 'Staff'), receptionController.confirmDeposit);
 router.post('/:id/check-in', requireRole('Admin', 'Staff'), receptionController.checkIn);
+router.put('/:id', requireRole('Admin', 'Staff'), receptionController.updateBooking);
+router.put('/:id/rooms/:detailId/guests', requireRole('Admin', 'Staff'), receptionController.updateRoomGuests);
 
 // ---- Xem và hủy đơn: khách chỉ với đơn của mình, Admin/Lễ tân với mọi đơn ----
 router.get('/:id', bookingController.getBookingById);
