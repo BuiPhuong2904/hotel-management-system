@@ -48,6 +48,10 @@ const parseFields = (body) => {
   if (!Number.isFinite(MaxDiscountAmount) || MaxDiscountAmount < 0 || MaxDiscountAmount > MAX_AMOUNT) {
     return { error: 'Mức giảm tối đa phải là số từ 0 trở lên' };
   }
+  const { UsageLimit } = body;
+  if (UsageLimit != null && (!Number.isInteger(UsageLimit) || UsageLimit < 1 || UsageLimit > 4294967295)) {
+    return { error: 'Giới hạn lượt dùng phải là số nguyên dương tối đa 4294967295 hoặc null' };
+  }
   if (!StartDate || !EndDate) {
     return { error: 'Thời gian hiệu lực không hợp lệ (dạng YYYY-MM-DD hoặc YYYY-MM-DD HH:mm)' };
   }
@@ -55,7 +59,7 @@ const parseFields = (body) => {
   if (!STATUSES.includes(Status)) return { error: `Trạng thái phải là một trong: ${STATUSES.join(', ')}` };
   if (Note && Note.length > 255) return { error: 'Mô tả tối đa 255 ký tự' };
 
-  return { data: { PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note } };
+  return { data: { PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit } };
 };
 
 // GET /api/v1/promotions   (Admin)

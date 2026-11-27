@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
 const COLUMNS = `p.PromoID, p.PromoCode, p.DiscountPercent, p.MaxDiscountAmount,
-  p.StartDate, p.EndDate, p.Status, p.Note`;
+  p.StartDate, p.EndDate, p.Status, p.Note, p.UsageLimit`;
 
 const PromotionModel = {
   async getAll() {
@@ -25,22 +25,22 @@ const PromotionModel = {
     return rows[0] || null;
   },
 
-  async create({ PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note }) {
+  async create({ PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit }) {
     const [result] = await db.query(
-      `INSERT INTO Promotions (PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note]
+      `INSERT INTO Promotions (PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit ?? null]
     );
     return result.insertId;
   },
 
-  async update(id, { PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note }) {
+  async update(id, { PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit }) {
     const [result] = await db.query(
       `UPDATE Promotions
        SET PromoCode = ?, DiscountPercent = ?, MaxDiscountAmount = ?, StartDate = ?, EndDate = ?,
-           Status = ?, Note = ?
+           Status = ?, Note = ?, UsageLimit = IF(?, ?, UsageLimit)
        WHERE PromoID = ?`,
-      [PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, id]
+      [PromoCode, DiscountPercent, MaxDiscountAmount, StartDate, EndDate, Status, Note, UsageLimit !== undefined, UsageLimit ?? null, id]
     );
     return result.affectedRows > 0;
   },

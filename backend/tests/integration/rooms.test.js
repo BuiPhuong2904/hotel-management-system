@@ -38,7 +38,10 @@ before(async () => {
     const schema = sql.replace(/^CREATE DATABASE Hotel_Management\s+CHARACTER SET utf8mb4\s+COLLATE utf8mb4_unicode_ci;\s*USE Hotel_Management;\s*/i, '');
     if (schema === sql) throw new Error('Không nhận diện được phần tạo database trong file SQL; dừng để bảo vệ database thật.');
     await connection.query(schema);
-    await connection.query(fs.readFileSync(path.join(__dirname, '../../../database/migrations/001_add_promotions.sql'), 'utf8'));
+    const migrations = path.join(__dirname, '../../../database/migrations');
+    for (const filename of fs.readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) {
+      await connection.query(fs.readFileSync(path.join(migrations, filename), 'utf8'));
+    }
   } finally {
     await connection.end();
   }
@@ -58,6 +61,7 @@ before(async () => {
 
   const app = express();
   app.use(express.json());
+  app.use('/api/v1/promotions', require('../../routes/promotionRoutes'));
   app.use('/api/v1/rooms', require('../../routes/roomRoutes'));
   app.use('/api/v1/room-types', require('../../routes/roomTypeRoutes'));
   server = await new Promise((resolve, reject) => {
@@ -215,4 +219,25 @@ test('roomService dùng API thật cho vòng đời phòng và quyền lễ tân
   token = adminToken;
   await service.deleteRoomAPI(id);
   await assert.rejects(service.getRoomAPI(id), (err) => err.response?.status === 404);
+});
+
+test('Admin lưu hạn mức khuyến mãi và giữ tương thích với client cũ', async () => {
+  const path = '/promotions';
+  const token = adminToken;
+  const body = { PromoCode: 'LIMITQA', DiscountPercent: 10, MaxDiscountAmount: 100000,
+    StartDate: '2026-01-01', EndDate: '2026-12-31' };
+  const list = await request('GET', path, { token });
+  assert.equal(list.body.data.find((p) => p.PromoCode === 'VIP10').UsageLimit, null);
+  const created = await request('POST', path, { token, body: { ...body, UsageLimit: 5 } });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.data.UsageLimit, 5);
+  const item = path + '/' + created.body.data.PromoID;
+  for (const [fields, expected] of [[{}, 5], [{ UsageLimit: 1 }, 1], [{ UsageLimit: null }, null]]) {
+    const updated = await request('PUT', item, { token, body: { ...body, ...fields } });
+    assert.equal(updated.status, 200);
+    assert.equal((await request('GET', item, { token })).body.data.UsageLimit, expected);
+  }
+  for (const value of [0, -1, 1.5, true, '2', 4294967296]) {
+    assert.equal((await request('PUT', item, { token, body: { ...body, UsageLimit: value } })).status, 400);
+  }
 });
