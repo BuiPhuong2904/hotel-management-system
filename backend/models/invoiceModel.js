@@ -3,15 +3,18 @@ const db = require('../config/db');
 const INVOICE_SELECT = `
   SELECT i.InvoiceID, i.BookingID, i.CreatedBy, u.FullName AS CreatedByName,
          i.BillingName, i.BillingAddress, i.RoomTotal, i.TimeSurchargeTotal, i.ServiceTotal,
-         i.DiscountAmount, i.DepositDeducted, i.TotalAmount, i.AmountDue, i.PaymentStatus, i.PaymentMethod,
+         i.DiscountAmount, i.VatRate, i.VatAmount, i.DepositDeducted, i.TotalAmount, i.AmountDue, i.PaymentStatus, i.PaymentMethod,
          i.TransactionReference, i.PaidAt,
          b.UserID, b.GuestName, b.GuestPhone, b.BookingSource
   FROM Invoices i
   JOIN Bookings b ON b.BookingID = i.BookingID
   JOIN Users u ON u.UserID = i.CreatedBy`;
 
-const SUMMARY_COLUMNS = `i.InvoiceID, i.BookingID, i.BillingName, i.TotalAmount, i.AmountDue,
-  i.PaymentStatus, i.PaymentMethod, i.PaidAt`;
+const SUMMARY_COLUMNS = `i.InvoiceID, i.BookingID, i.BillingName, i.DiscountAmount, i.VatAmount,
+  i.DepositDeducted, i.TotalAmount, i.AmountDue, i.PaymentStatus, i.PaymentMethod, i.PaidAt,
+  b.GuestName, b.GuestPhone, cb.FullName AS CreatedByName`;
+const SUMMARY_JOINS = `JOIN Bookings b ON b.BookingID = i.BookingID
+  JOIN Users cb ON cb.UserID = i.CreatedBy`;
 
 // Chạy một nhóm câu lệnh trong MỘT transaction
 const withTransaction = async (work) => {
@@ -65,10 +68,10 @@ const InvoiceModel = {
 
       const [result] = await conn.query(
         `INSERT INTO Invoices (BookingID, CreatedBy, BillingName, BillingAddress, RoomTotal,
-                               TimeSurchargeTotal, ServiceTotal, DiscountAmount, DepositDeducted,
-                               TotalAmount, AmountDue, PaymentStatus, PaymentMethod,
+                               TimeSurchargeTotal, ServiceTotal, DiscountAmount, VatRate, VatAmount,
+                               DepositDeducted, TotalAmount, AmountDue, PaymentStatus, PaymentMethod,
                                TransactionReference, PaidAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)`,
         [
           bookingId,
           invoice.CreatedBy,
@@ -78,6 +81,8 @@ const InvoiceModel = {
           invoice.TimeSurchargeTotal,
           invoice.ServiceTotal,
           invoice.DiscountAmount,
+          invoice.VatRate,
+          invoice.VatAmount,
           invoice.DepositDeducted,
           invoice.TotalAmount,
           invoice.AmountDue,
@@ -103,7 +108,7 @@ const InvoiceModel = {
 
   // Danh sách hóa đơn
   async list({ from, to, status, bookingId } = {}) {
-    let sql = `SELECT ${SUMMARY_COLUMNS} FROM Invoices i WHERE 1 = 1`;
+    let sql = `SELECT ${SUMMARY_COLUMNS} FROM Invoices i ${SUMMARY_JOINS} WHERE 1 = 1`;
     const params = [];
     if (from && to) {
       sql += ' AND i.PaidAt >= ? AND i.PaidAt < ?';
@@ -127,7 +132,7 @@ const InvoiceModel = {
     const [rows] = await db.query(
       `SELECT ${SUMMARY_COLUMNS}
        FROM Invoices i
-       JOIN Bookings b ON b.BookingID = i.BookingID
+       ${SUMMARY_JOINS}
        WHERE b.UserID = ?
        ORDER BY i.PaidAt DESC, i.InvoiceID DESC`,
       [userId]

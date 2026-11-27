@@ -78,7 +78,9 @@ exports.monthlyReport = async (req, res) => {
         items,
         roomRevenue,
         serviceRevenue: num(totals.ServiceRevenue),
+        // totalRevenue = roomRevenue + serviceRevenue - discountTotal + vatTotal
         discountTotal: num(totals.DiscountTotal),
+        vatTotal: num(totals.VatTotal),
         totalRevenue: num(totals.TotalRevenue),
         invoiceCount: Number(totals.InvoiceCount),
       },

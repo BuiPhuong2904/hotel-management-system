@@ -31,6 +31,7 @@ const StatsModel = {
               COALESCE(SUM(RoomTotal + TimeSurchargeTotal), 0) AS RoomRevenue,
               COALESCE(SUM(ServiceTotal), 0) AS ServiceRevenue,
               COALESCE(SUM(DiscountAmount), 0) AS DiscountTotal,
+              COALESCE(SUM(VatAmount), 0) AS VatTotal,
               COALESCE(SUM(TotalAmount), 0) AS TotalRevenue
        FROM Invoices
        WHERE PaymentStatus = 'Paid' AND PaidAt >= ? AND PaidAt < ?`,

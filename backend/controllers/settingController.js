@@ -25,6 +25,7 @@ const VALIDATORS = {
   MinDepositRateOnline: rate('Tỉ lệ cọc tối thiểu'),
   EarlyCheckInSurchargeRate: rate('Phụ thu nhận phòng sớm'),
   LateCheckOutSurchargeRate: rate('Phụ thu trả phòng trễ'),
+  VatRate: rate('Thuế VAT'),
   StandardCheckInTime: time('Giờ nhận phòng chuẩn'),
   StandardCheckOutTime: time('Giờ trả phòng chuẩn'),
   ForeignerCoefficient: (raw) => {

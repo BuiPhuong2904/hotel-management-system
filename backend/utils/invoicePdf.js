@@ -153,6 +153,9 @@ const buildInvoicePdf = (invoice) =>
         ['Phụ thu nhận sớm / trả trễ', invoice.TimeSurchargeTotal],
         ['Tiền dịch vụ', invoice.ServiceTotal],
         ...(Number(invoice.DiscountAmount) > 0 ? [['Khuyến mãi (giảm tiền phòng)', -Number(invoice.DiscountAmount)]] : []),
+        ...(Number(invoice.VatAmount) > 0
+          ? [[`Thuế VAT (${Math.round(Number(invoice.VatRate) * 10000) / 100}%)`, Number(invoice.VatAmount)]]
+          : []),
         ['Tổng cộng', invoice.TotalAmount, true],
         ['Đã trừ tiền cọc', invoice.DepositDeducted],
         ['Khách thanh toán', invoice.AmountDue, true],

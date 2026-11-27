@@ -65,6 +65,7 @@ const readSettings = async () => {
     minDepositRate: num('MinDepositRateOnline'),
     earlyRate: num('EarlyCheckInSurchargeRate'),
     lateRate: num('LateCheckOutSurchargeRate'),
+    vatRate: num('VatRate'),
     checkInTime: time('StandardCheckInTime'),
     checkOutTime: time('StandardCheckOutTime'),
   };
