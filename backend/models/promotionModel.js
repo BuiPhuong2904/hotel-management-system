@@ -46,6 +46,13 @@ const PromotionModel = {
     return result.affectedRows > 0;
   },
 
+  async updateStatus(id, status) {
+    const [result] = await db.execute(
+      'UPDATE Promotions SET Status = ? WHERE PromoID = ?', [status, id]
+    );
+    return result.affectedRows > 0;
+  },
+
   // Số đơn CHƯA hoàn tất đang dùng mã này
   async countOpenBookings(id) {
     const [rows] = await db.query(

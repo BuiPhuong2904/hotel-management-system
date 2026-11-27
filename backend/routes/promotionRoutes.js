@@ -11,6 +11,7 @@ router.get('/', requireRole('Admin'), promotionController.getPromotions);
 router.post('/', requireRole('Admin'), promotionController.createPromotion);
 router.get('/:id', requireRole('Admin'), promotionController.getPromotionById);
 router.put('/:id', requireRole('Admin'), promotionController.updatePromotion);
+router.patch('/:id/status', requireRole('Admin'), promotionController.updatePromotionStatus);
 router.delete('/:id', requireRole('Admin'), promotionController.deletePromotion);
 
 module.exports = router;

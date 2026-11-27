@@ -311,3 +311,37 @@ test('4.3: online và tại quầy tranh lượt cuối trên hai phòng khác n
   const loserRoom = await request('GET', '/rooms/' + ids[1-winner]);
   assert.equal(loserRoom.body.data.Status, 'Available');
 });
+
+test('4.4: chỉ Admin được tạm ngưng và kích hoạt lại khuyến mãi', async () => {
+  const token = adminToken;
+  const body = { PromoCode: 'STATUSQA', StartDate: '2020-01-01', EndDate: '2099-12-31',
+    DiscountPercent: 10, MaxDiscountAmount: 100000, UsageLimit: 3, Note: 'test' };
+  const created = await request('POST', '/promotions', { token, body });
+  assert.equal(created.status, 201);
+  const original = created.body.data;
+  const item = '/promotions/' + original.PromoID;
+  const patch = (Status, auth) => request('PATCH', item + '/status', { token: auth, body: { Status } });
+  const check = () => request('GET', '/promotions/check?code=STATUSQA', { token: customerToken });
+  assert.equal((await patch('Inactive')).status, 401);
+  for (const auth of [staffToken, customerToken]) assert.equal((await patch('Inactive', auth)).status, 403);
+  for (const invalid of [undefined, 'Paused']) assert.equal((await patch(invalid, token)).status, 400);
+  assert.equal((await check()).status, 200);
+  for (const status of ['Inactive', 'Inactive', 'Active', 'Active']) {
+    const changed = await patch(status, token);
+    assert.equal(changed.status, 200);
+    assert.equal(changed.body.data.Status, status);
+    const detail = await request('GET', item, { token });
+    assert.deepEqual(detail.body.data, { ...original, Status: status });
+    const checked = await check();
+    if (status === 'Inactive') {
+      assert.equal(checked.status, 404);
+      assert.match(checked.body.message, /tạm khóa/);
+    } else {
+      assert.equal(checked.status, 200);
+      assert.equal(checked.body.data.RemainingUses, 3);
+    }
+  }
+  for (const [id, expected] of [['invalid', 400], ['99999999', 404]]) {
+    assert.equal((await request('PATCH', '/promotions/' + id + '/status', { token, body: { Status: 'Active' } })).status, expected);
+  }
+});

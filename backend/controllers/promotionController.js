@@ -141,6 +141,22 @@ exports.updatePromotion = async (req, res) => {
   }
 };
 
+// PATCH /api/v1/promotions/:id/status
+exports.updatePromotionStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidId(id)) return fail(res, 400, 'Mã khuyến mãi không hợp lệ');
+    const status = req.body?.Status;
+    if (!STATUSES.includes(status)) return fail(res, 400, 'Status phải là Active hoặc Inactive');
+    if (!await PromotionModel.updateStatus(id, status)) {
+      return fail(res, 404, 'Không tìm thấy mã khuyến mãi');
+    }
+    return res.json({ success: true, data: { PromoID: Number(id), Status: status } });
+  } catch (err) {
+    return handleError(res, err);
+  }
+};
+
 // DELETE /api/v1/promotions/:id   (Admin)
 exports.deletePromotion = async (req, res) => {
   try {
