@@ -37,6 +37,7 @@ app.use('/api/v1/reports', require('./routes/reportRoutes'));
 app.use('/api/v1/dashboard', require('./routes/dashboardRoutes'));
 
 app.use('/api/v1/settings', require('./routes/settingRoutes'));
+app.use('/api/v1/promotions', require('./routes/promotionRoutes'));
 
 app.use('/api/v1/chatbot', require('./routes/chatbotRoutes'));
 
