@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { resolveBookingPromo } = require('../utils/promotion');
 
 const BOOKING_COLUMNS = `BookingID, UserID, GuestName, GuestPhone, CreatedBy, BookingSource,
   BookingDate, ExpectedCheckIn, ExpectedCheckOut, Status, Deposit, PromoID, Note`;
@@ -108,6 +109,18 @@ const insertBooking = async (conn, booking, details) => {
   return bookingId;
 };
 
+// Cả hai kênh khóa phòng trước, rồi khóa mã trước khi đọc xung đột hoặc ghi đơn.
+const createBooking = ({ booking, details, promoCode }, work) =>
+  withTransaction(async (conn) => {
+    const roomIds = details.map((detail) => detail.RoomID);
+    const locked = await lockRooms(conn, roomIds);
+    const { promo, error } = await resolveBookingPromo(promoCode, conn);
+    if (error) throw Object.assign(new Error(error), { code: 'PROMO_UNAVAILABLE' });
+    const record = { ...booking, PromoID: promo?.PromoID ?? null };
+    const bookingId = await work(conn, roomIds, locked, record);
+    return { bookingId, promo };
+  });
+
 const BookingModel = {
   // Thông tin các phòng (giá, số khách, trạng thái)
   async getRoomsForBooking(roomIds) {
@@ -123,10 +136,9 @@ const BookingModel = {
   },
 
   // ĐẶT PHÒNG ONLINE
-  async createWithDetails({ booking, details }) {
-    return withTransaction(async (conn) => {
-      const roomIds = details.map((d) => d.RoomID);
-      const locked = await lockRooms(conn, roomIds);
+  async createWithDetails(input) {
+    const { details } = input;
+    return createBooking(input, async (conn, roomIds, locked, booking) => {
       const unavailable = missingOrMaintenance(roomIds, locked);
       (await findConflicts(conn, roomIds, booking.ExpectedCheckIn, booking.ExpectedCheckOut)).forEach(
         (id) => unavailable.add(id)
@@ -138,10 +150,9 @@ const BookingModel = {
   },
 
   // LẬP PHIẾU THUÊ cho khách vãng lai
-  async createDirect({ booking, details }) {
-    return withTransaction(async (conn) => {
-      const roomIds = details.map((d) => d.RoomID);
-      const locked = await lockRooms(conn, roomIds);
+  async createDirect(input) {
+    const { details } = input;
+    return createBooking(input, async (conn, roomIds, locked, booking) => {
       const notReady = new Set(roomIds.filter((id) => !locked.some((r) => r.RoomID === id)));
       locked.filter((r) => r.Status !== 'Available').forEach((r) => notReady.add(r.RoomID));
       if (notReady.size > 0) throw modelError('ROOMS_NOT_READY', [...notReady]);

@@ -272,3 +272,42 @@ test('4.2: hủy booking hoàn một lượt, booking hoàn tất vẫn tính l�
   assert.equal((await request('PUT', `/promotions/${id}`, { ...auth, body: { ...body, UsageLimit: null } })).status, 200);
   assert.equal((await check()).body.data.RemainingUses, null);
 });
+
+test('4.3: online và tại quầy tranh lượt cuối trên hai phòng khác nhau', async () => {
+  const auth = { token: adminToken };
+  const code = 'LASTUSE';
+  const created = await request('POST', '/promotions', { ...auth, body: {
+    PromoCode: code, DiscountPercent: 10, MaxDiscountAmount: 100000, UsageLimit: 1,
+    StartDate: '2020-01-01', EndDate: '2099-12-31',
+  } });
+  assert.equal(created.status, 201);
+  const ids = [];
+  for (const number of ['RACE01', 'RACE02']) {
+    const room = await request('POST', '/rooms', { ...auth, body: { RoomNumber: number, RoomTypeID: 'A' } });
+    assert.equal(room.status, 201);
+    ids.push(room.body.data.RoomID);
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const checkout = [tomorrow.getFullYear(), String(tomorrow.getMonth()+1).padStart(2,'0'),
+    String(tomorrow.getDate()).padStart(2,'0')].join('-');
+  const guest = { FullName: 'Test race', IdentityNumber: '123456789012', CustomerType: 'Domestic' };
+  const common = { GuestName: guest.FullName, GuestPhone: '0900000000', PromoCode: code };
+  const online = { ...common, CheckInDate: '2090-01-01', CheckOutDate: '2090-01-02',
+    Rooms: [{ RoomID: ids[0], GuestCount: 1 }] };
+  const direct = { ...common, CheckOutDate: checkout, Rooms: [{ RoomID: ids[1], Guests: [guest] }] };
+  const responses = await Promise.all([
+    request('POST', '/bookings/online', { token: customerToken, body: online }),
+    request('POST', '/bookings/direct', { token: staffToken, body: direct }),
+  ]);
+  assert.deepEqual(responses.map((r) => r.status).sort(), [201, 400], JSON.stringify(responses));
+  assert.match(responses.find((r) => r.status === 400).body.message, /hết lượt/);
+  const winner = responses.findIndex((r) => r.status === 201);
+  assert.equal(responses[winner].body.data.PromoCode, code);
+  const [rows] = await pool.execute(
+    'SELECT b.BookingID, d.RoomID FROM Bookings b JOIN BookingDetails d USING (BookingID) WHERE b.PromoID = ?',
+    [created.body.data.PromoID]);
+  assert.deepEqual(rows.map((r) => r.RoomID), [ids[winner]]);
+  const loserRoom = await request('GET', '/rooms/' + ids[1-winner]);
+  assert.equal(loserRoom.body.data.Status, 'Available');
+});

@@ -1,5 +1,5 @@
 const PromotionModel = require('../models/promotionModel');
-const { toDateTimeString } = require('./bookingRules');
+const { toDateTimeString, nowString } = require('./bookingRules');
 
 const CODE_PATTERN = /^[A-Z0-9_-]{3,30}$/;
 const normalizeCode = (raw) => String(raw ?? '').trim().toUpperCase();
@@ -16,13 +16,15 @@ const unusableReason = (promo, now) => {
 };
 
 // Tìm và kiểm tra mã người dùng nhập.
-const resolvePromoCode = async (rawCode, now) => {
+const resolveBookingPromo = async (rawCode, conn) => {
   const code = normalizeCode(rawCode);
   if (code === '') return { promo: null };
   if (!CODE_PATTERN.test(code)) return { error: 'Mã khuyến mãi không tồn tại' };
-  const promo = await PromotionModel.getByCode(code);
-  const reason = unusableReason(promo, now);
+  // Khóa trước lần đọc snapshot đầu tiên để thấy booking đã commit của lượt trước.
+  await conn.execute('SELECT PromoID FROM Promotions WHERE PromoCode = ? FOR UPDATE', [code]);
+  const promo = await PromotionModel.getByCode(code, conn);
+  const reason = unusableReason(promo, nowString());
   return reason ? { error: reason } : { promo };
 };
 
-module.exports = { CODE_PATTERN, normalizeCode, unusableReason, resolvePromoCode };
+module.exports = { CODE_PATTERN, normalizeCode, unusableReason, resolveBookingPromo };

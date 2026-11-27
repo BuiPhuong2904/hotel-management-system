@@ -2,8 +2,6 @@ const BookingModel = require('../models/bookingModel');
 const SettingModel = require('../models/settingModel');
 const UserModel = require('../models/userModel');
 const pricing = require('../utils/pricing');
-const { resolvePromoCode } = require('../utils/promotion');
-const { nowString } = require('../utils/bookingRules');
 
 const MAX_NIGHTS = 30;
 const MAX_ROOMS_PER_BOOKING = 10;
@@ -13,6 +11,7 @@ const fail = (res, status, message) => res.status(status).json({ success: false,
 const isValidId = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
 
 const handleError = (res, err) => {
+  if (err.code === 'PROMO_UNAVAILABLE') return fail(res, 400, err.message);
   if (err.code === 'ROOMS_UNAVAILABLE') {
     return res.status(409).json({
       success: false,
@@ -189,12 +188,8 @@ exports.createOnlineBooking = async (req, res) => {
     if (note && note.length > 255) return fail(res, 400, 'Ghi chú tối đa 255 ký tự');
 
     // ---- Mã khuyến mãi ----
-    const promoResult = await resolvePromoCode(body.PromoCode, nowString());
-    if (promoResult.error) return fail(res, 400, promoResult.error);
-    const promo = promoResult.promo;
-
-    // ---- Ghi vào database ----
-    const bookingId = await BookingModel.createWithDetails({
+    const { bookingId, promo } = await BookingModel.createWithDetails({
+      promoCode: body.PromoCode,
       booking: {
         UserID: req.user.id,
         GuestName: guestName,
@@ -205,7 +200,6 @@ exports.createOnlineBooking = async (req, res) => {
         ExpectedCheckOut: `${checkOutDate} ${settings.checkOutTime}`,
         Status: status,
         Deposit: deposit,
-        PromoID: promo ? promo.PromoID : null,
         Note: note,
       },
       details,

@@ -1,7 +1,6 @@
 const BookingModel = require('../models/bookingModel');
 const pricing = require('../utils/pricing');
 const rules = require('../utils/bookingRules');
-const { resolvePromoCode } = require('../utils/promotion');
 const MAX_NIGHTS = 30;
 const MAX_ROOMS_PER_BOOKING = 10;
 
@@ -15,6 +14,7 @@ const fail = (res, status, message) => res.status(status).json({ success: false,
 const isValidId = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
 
 const handleError = (res, err) => {
+  if (err.code === 'PROMO_UNAVAILABLE') return fail(res, 400, err.message);
   if (err.code === 'ROOMS_NOT_READY') {
     return res.status(409).json({
       success: false,
@@ -128,11 +128,8 @@ exports.createDirectBooking = async (req, res) => {
       return fail(res, 400, 'Tiền cọc không được lớn hơn tổng tiền dự kiến');
     }
 
-    const promoResult = await resolvePromoCode(body.PromoCode, now);
-    if (promoResult.error) return fail(res, 400, promoResult.error);
-    const promo = promoResult.promo;
-
-    const bookingId = await BookingModel.createDirect({
+    const { bookingId, promo } = await BookingModel.createDirect({
+      promoCode: body.PromoCode,
       booking: {
         UserID: null,
         GuestName: guestName,
@@ -143,7 +140,6 @@ exports.createDirectBooking = async (req, res) => {
         ExpectedCheckOut: `${checkOutDate} ${settings.checkOutTime}`,
         Status: 'CheckedIn',
         Deposit: deposit,
-        PromoID: promo ? promo.PromoID : null,
         Note: note,
       },
       details,

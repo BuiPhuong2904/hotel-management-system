@@ -21,8 +21,8 @@ const PromotionModel = {
   },
 
   // Tìm theo mã nhập (đã viết hoa). Không có thì trả về null.
-  async getByCode(code) {
-    const [rows] = await db.query(`SELECT ${COLUMNS} FROM Promotions p WHERE p.PromoCode = ?`, [code]);
+  async getByCode(code, connection = db) {
+    const [rows] = await connection.query(`SELECT ${COLUMNS} FROM Promotions p WHERE p.PromoCode = ?`, [code]);
     return rows[0] || null;
   },
 
