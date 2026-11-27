@@ -9,6 +9,9 @@ const unusableReason = (promo, now) => {
   if (promo.Status !== 'Active') return 'Mã khuyến mãi đang tạm khóa';
   if (now < toDateTimeString(promo.StartDate)) return 'Mã khuyến mãi chưa đến thời gian áp dụng';
   if (now > toDateTimeString(promo.EndDate)) return 'Mã khuyến mãi đã hết hạn';
+  if (promo.UsageLimit != null && promo.UsedCount >= promo.UsageLimit) {
+    return 'Mã khuyến mãi đã hết lượt sử dụng';
+  }
   return null;
 };
 

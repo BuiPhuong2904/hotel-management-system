@@ -1,13 +1,14 @@
 const db = require('../config/db');
 
 const COLUMNS = `p.PromoID, p.PromoCode, p.DiscountPercent, p.MaxDiscountAmount,
-  p.StartDate, p.EndDate, p.Status, p.Note, p.UsageLimit`;
+  p.StartDate, p.EndDate, p.Status, p.Note, p.UsageLimit,
+  (SELECT COUNT(*) FROM Bookings b
+   WHERE b.PromoID = p.PromoID AND b.Status <> 'Cancelled') AS UsedCount`;
 
 const PromotionModel = {
   async getAll() {
     const [rows] = await db.query(
-      `SELECT ${COLUMNS},
-              (SELECT COUNT(*) FROM Bookings b WHERE b.PromoID = p.PromoID) AS UsedCount
+      `SELECT ${COLUMNS}
        FROM Promotions p
        ORDER BY p.PromoID DESC`
     );

@@ -62,6 +62,7 @@ before(async () => {
   const app = express();
   app.use(express.json());
   app.use('/api/v1/promotions', require('../../routes/promotionRoutes'));
+  app.use('/api/v1/bookings', require('../../routes/bookingRoutes'));
   app.use('/api/v1/rooms', require('../../routes/roomRoutes'));
   app.use('/api/v1/room-types', require('../../routes/roomTypeRoutes'));
   server = await new Promise((resolve, reject) => {
@@ -240,4 +241,34 @@ test('Admin lưu hạn mức khuyến mãi và giữ tương thích với client
   for (const value of [0, -1, 1.5, true, '2', 4294967296]) {
     assert.equal((await request('PUT', item, { token, body: { ...body, UsageLimit: value } })).status, 400);
   }
+});
+
+test('4.2: hủy booking hoàn một lượt, booking hoàn tất vẫn tính lượt', async () => {
+  const auth = { token: adminToken };
+  const body = { PromoCode: 'RETURNQA', DiscountPercent: 10, MaxDiscountAmount: 100000,
+    StartDate: '2020-01-01', EndDate: '2099-12-31', UsageLimit: 2 };
+  const created = await request('POST', '/promotions', { ...auth, body });
+  assert.equal(created.status, 201);
+  const id = created.body.data.PromoID;
+  const check = () => request('GET', '/promotions/check?code=RETURNQA', { token: customerToken });
+  assert.equal((await check()).body.data.RemainingUses, 2);
+  async function booking(status) {
+    const [row] = await pool.execute(
+      `INSERT INTO Bookings (GuestName, GuestPhone, ExpectedCheckIn, ExpectedCheckOut, PromoID, Status)
+       VALUES ('Test', '0900000000', '2099-01-01', '2099-01-02', ?, ?)`, [id, status]);
+    return row.insertId;
+  }
+  await booking('Completed');
+  assert.equal((await check()).body.data.RemainingUses, 1);
+  const pending = await booking('Pending');
+  const exhausted = await check();
+  assert.equal(exhausted.status, 404);
+  assert.match(exhausted.body.message, /hết lượt/);
+  assert.equal((await request('PATCH', `/bookings/${pending}/cancel`, auth)).status, 200);
+  assert.equal((await check()).body.data.RemainingUses, 1);
+  assert.equal((await request('PATCH', `/bookings/${pending}/cancel`, auth)).status, 409);
+  const list = await request('GET', '/promotions', auth);
+  assert.equal(list.body.data.find((promo) => promo.PromoID === id).UsedCount, 1);
+  assert.equal((await request('PUT', `/promotions/${id}`, { ...auth, body: { ...body, UsageLimit: null } })).status, 200);
+  assert.equal((await check()).body.data.RemainingUses, null);
 });

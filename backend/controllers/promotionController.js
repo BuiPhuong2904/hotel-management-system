@@ -85,6 +85,7 @@ exports.checkPromotion = async (req, res) => {
         PromoCode: promo.PromoCode,
         DiscountPercent: Number(promo.DiscountPercent),
         MaxDiscountAmount: Number(promo.MaxDiscountAmount),
+        RemainingUses: promo.UsageLimit === null ? null : promo.UsageLimit - promo.UsedCount,
         EndDate: rules.toDateTimeString(promo.EndDate),
         Note: promo.Note,
       },
