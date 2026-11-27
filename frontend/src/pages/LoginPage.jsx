@@ -17,6 +17,7 @@ import {
 } from 'react-icons/fi';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import ToastNotification from '../components/ToastNotification';
+import authService from '../services/authService';
 
 const hotelBenefits = [
   {
@@ -42,6 +43,7 @@ function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const timeoutRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -83,7 +85,7 @@ function LoginPage() {
     }, destination ? 800 : 3000);
   };
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
 
     if (!username.trim() || !password.trim()) {
@@ -93,28 +95,43 @@ function LoginPage() {
       );
       return;
     }
+    if (submitting) return;
 
-    const isStaff = /admin|staff/i.test(username);
-    const role = isStaff ? 'staff' : 'customer';
-    let customer = { role, name: username.trim(), fullName: username.trim() };
-    if (role === 'customer') {
-      try {
-        const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
-        const registered = Array.isArray(registeredUsers)
-          ? registeredUsers.find((item) => item.username === username.trim())
-          : null;
-        if (registered) customer = registered;
-      } catch (error) {
-        console.error('Không thể đọc tài khoản khách hàng đã đăng ký.', error);
-      }
-      localStorage.setItem('customerUser', JSON.stringify(customer));
+    setSubmitting(true);
+    try {
+      const { data } = await authService.login(username.trim(), password);
+      const apiUser = data.user;
+      const isStaff = apiUser.Role === 'Admin' || apiUser.Role === 'Staff';
+      const role = isStaff ? 'staff' : 'customer';
+      const user = {
+        id: apiUser.UserID,
+        role,
+        apiRole: apiUser.Role,
+        username: apiUser.Username,
+        name: apiUser.FullName,
+        fullName: apiUser.FullName,
+        phone: apiUser.Phone || '',
+        email: apiUser.Email || '',
+      };
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(user));
+      if (isStaff) localStorage.removeItem('customerUser');
+      else localStorage.setItem('customerUser', JSON.stringify(user));
+
+      notify(
+        'Đăng nhập thành công!',
+        'success',
+        isStaff ? '/dashboard' : getCustomerDestination(),
+      );
+    } catch (error) {
+      notify(
+        error.response?.data?.message || 'Không thể kết nối máy chủ, vui lòng thử lại!',
+        'error',
+      );
+    } finally {
+      setSubmitting(false);
     }
-    localStorage.setItem('user', JSON.stringify(customer));
-    notify(
-      'Đăng nhập thành công!',
-      'success',
-      isStaff ? '/dashboard' : getCustomerDestination(),
-    );
   };
 
   const enterDemo = (role) => {
@@ -124,6 +141,7 @@ function LoginPage() {
       ? { role, name }
       : { role: 'customer', name, fullName: name, phone: '0912399121', email: 'minhanh.nguyen@email.com' };
 
+    localStorage.removeItem('token');
     if (!isStaff) localStorage.setItem('customerUser', JSON.stringify(customer));
     localStorage.setItem('user', JSON.stringify(customer));
     notify(
@@ -294,7 +312,8 @@ function LoginPage() {
 
               <button
                 type="submit"
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] text-sm font-bold text-white hover:bg-[#0D8BEA]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075A9C]"
+                disabled={submitting}
+                className="flex h-10 disabled:opacity-60 w-full items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] text-sm font-bold text-white hover:bg-[#0D8BEA]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075A9C]"
               >
                 Đăng nhập
                 <FiLogIn aria-hidden="true" className="h-4 w-4" />
