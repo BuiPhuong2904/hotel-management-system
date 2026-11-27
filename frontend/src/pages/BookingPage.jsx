@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FiChevronLeft,
   FiChevronRight,
@@ -11,8 +12,18 @@ import {
 } from 'react-icons/fi';
 import BookingDetailDrawer from '../components/BookingDetailDrawer';
 import BookingFormDialog from '../components/BookingFormDialog';
+import ToastNotification from '../components/ToastNotification';
+import { getRoomsAPI } from '../services/roomService';
+import bookingService from '../services/bookingService';
+import {
+  formToApiPayload,
+  mapBooking,
+  mapGuestToApi,
+  mapRoom,
+  startOfDay,
+  toDateInput,
+} from '../utils/bookingMapper';
 
-const BASE_WEEK = new Date('2026-10-26T00:00:00.000Z');
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const statusColors = {
@@ -33,288 +44,43 @@ const statusFilters = [
   { label: 'Đã trả/hủy', color: 'rgba(142,142,147,0.8)' },
 ];
 
-const initialRooms = [
-  {
-    number: '101',
-    floor: 'T1',
-    type: 'A',
-    description: 'Giường đôi Deluxe',
-    price: '150.000 đ',
-    roomStatus: 'Đang lưu trú',
-    bookings: [
-      {
-        guest: 'Nguyễn Văn A',
-        code: 'BK-1011',
-        guests: 4,
-        status: 'Đang lưu trú',
-        startDay: 0,
-        duration: 3,
-      },
-    ],
-  },
-  {
-    number: '102',
-    floor: 'T1',
-    type: 'A',
-    description: 'Giường đôi Standard',
-    price: '150.000 đ',
-    roomStatus: 'Sẵn sàng',
-    bookings: [
-      {
-        guest: 'Trần Thị B',
-        code: 'BK-1012',
-        guests: 2,
-        status: 'Đã xác nhận',
-        startDay: 2,
-        duration: 3,
-      },
-    ],
-  },
-  {
-    number: '103',
-    floor: 'T1',
-    type: 'B',
-    description: '2 giường đơn',
-    price: '170.000 đ',
-    roomStatus: 'Sẵn sàng',
-    bookings: [
-      {
-        guest: 'Lê Văn C',
-        code: 'BK-1013',
-        guests: 1,
-        status: 'Chờ xác nhận',
-        startDay: 2,
-        duration: 2,
-      },
-    ],
-  },
-  {
-    number: '104',
-    floor: 'T1',
-    type: 'B',
-    description: 'Giường đôi Deluxe',
-    price: '170.000 đ',
-    roomStatus: 'Đang dọn',
-    bookings: [
-      {
-        guest: 'Dọn dẹp',
-        status: 'Đang dọn',
-        startDay: 2,
-        duration: 1,
-      },
-      {
-        guest: 'Phạm Thị D',
-        code: 'BK-1014',
-        guests: 2,
-        status: 'Đã xác nhận',
-        startDay: 3,
-        duration: 3,
-      },
-    ],
-  },
-  {
-    number: '105',
-    floor: 'T1',
-    type: 'A',
-    description: 'Giường đôi Standard',
-    price: '150.000 đ',
-    roomStatus: 'Đang dọn',
-    bookings: [
-      {
-        guest: 'Khách trả phòng (11:00)',
-        status: 'Đã trả/hủy',
-        startDay: 1,
-        duration: 1,
-      },
-      {
-        guest: 'Dọn dẹp',
-        status: 'Đang dọn',
-        startDay: 2,
-        duration: 1,
-      },
-      {
-        guest: 'Quách Anh M',
-        code: 'BK-1022',
-        guests: 2,
-        status: 'Đang lưu trú',
-        startDay: 3,
-        duration: 1,
-      },
-    ],
-  },
-  {
-    number: '106',
-    floor: 'T1',
-    type: 'A',
-    description: 'Giường đôi Deluxe',
-    price: '150.000 đ',
-    roomStatus: 'Bảo trì',
-    bookings: [
-      {
-        guest: 'Bảo trì vòi sen',
-        status: 'Bảo trì',
-        startDay: 1,
-        duration: 1,
-      },
-      {
-        guest: 'Vũ Minh K',
-        code: 'BK-1016',
-        guests: 2,
-        status: 'Đang lưu trú',
-        startDay: 3,
-        duration: 2,
-      },
-    ],
-  },
-  {
-    number: '107',
-    floor: 'T1',
-    type: 'C',
-    description: 'Phòng VIP hướng phố',
-    price: '200.000 đ',
-    roomStatus: 'Đang lưu trú',
-    bookings: [
-      {
-        guest: 'Đỗ Xuân B',
-        code: 'BK-1021',
-        guests: 2,
-        status: 'Đang lưu trú',
-        startDay: 0,
-        duration: 2,
-      },
-    ],
-  },
-  {
-    number: '108',
-    floor: 'T1',
-    type: 'C',
-    description: 'Phòng view biển',
-    price: '200.000 đ',
-    roomStatus: 'Sẵn sàng',
-    bookings: [
-      {
-        guest: 'Đã hủy',
-        status: 'Đã trả/hủy',
-        startDay: 1,
-        duration: 2,
-      },
-      {
-        guest: 'Nguyễn Thị G',
-        code: 'BK-1018',
-        guests: 2,
-        status: 'Đã xác nhận',
-        startDay: 4,
-        duration: 3,
-      },
-    ],
-  },
-  {
-    number: '109',
-    floor: 'T1',
-    type: 'B',
-    description: '2 giường đơn',
-    price: '170.000 đ',
-    roomStatus: 'Sẵn sàng',
-    bookings: [
-      {
-        guest: 'Phạm Văn H',
-        code: 'BK-1019',
-        guests: 1,
-        status: 'Chờ xác nhận',
-        startDay: 3,
-        duration: 2,
-      },
-    ],
-  },
-  {
-    number: '110',
-    floor: 'T1',
-    type: 'C',
-    description: 'Phòng VIP hướng phố',
-    price: '200.000 đ',
-    roomStatus: 'Đang lưu trú',
-    bookings: [
-      {
-        guest: 'Lê Thị I',
-        code: 'BK-1020',
-        guests: 2,
-        status: 'Đang lưu trú',
-        startDay: 0,
-        duration: 2,
-      },
-    ],
-  },
-];
-
-const summaryCards = [
-  {
-    title: 'TỔNG LƯỢT ĐẶT',
-    value: '42',
-    detail: 'hồ sơ',
-    note: 'khoảng 7 ngày tới',
-    color: '#075A9C',
-  },
-  {
-    title: 'ĐANG LƯU TRÚ',
-    value: '36',
-    detail: '/ 48 phòng',
-    note: 'Công suất hiện tại: 75.0%',
-    color: '#0D8BEA',
-  },
-  {
-    title: 'ĐẾN HÔM NAY',
-    value: '07',
-    detail: 'lượt nhận',
-    note: 'Check-in từ 14:00',
-    color: '#2E8B57',
-  },
-  {
-    title: 'ĐI HÔM NAY',
-    value: '05',
-    detail: 'lượt trả',
-    note: 'Check-out trước 12:00',
-    color: '#D97706',
-  },
-  {
-    title: 'LẤP ĐẦY BÌNH QUÂN',
-    value: '78.4%',
-    note: '+3.2% tuần này',
-    color: '#075A9C',
-    progress: 81.88,
-  },
-  {
-    title: 'XUNG ĐỘT LỊCH',
-    value: '0',
-    detail: 'không đè lịch',
-    note: 'Hệ thống đồng bộ chuẩn',
-    color: 'rgba(217,83,79,0.9)',
-  },
-];
-
 const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
+const PAGE_SIZE = 10;
+const ROOM_STATUS_FILTERS = ['Đang dọn', 'Bảo trì'];
+
 function addDays(date, days) {
-  return new Date(date.getTime() + days * DAY_IN_MS);
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function startOfWeek(date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return start;
 }
 
 function formatDate(date, includeYear = false) {
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const year = date.getUTCFullYear();
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
 
   return includeYear ? `${day}/${month}/${year}` : `${day}/${month}`;
 }
 
+// Vị trí thanh đặt phòng trong tuần đang xem (cột 0..6)
 function getBookingPosition(weekStart, booking) {
-  const bookingStart = addDays(BASE_WEEK, booking.startDay);
+  const bookingStart = startOfDay(booking.checkIn);
   const bookingEnd = addDays(bookingStart, booking.duration);
   const visibleStart = Math.max(
     0,
-    Math.floor((bookingStart.getTime() - weekStart.getTime()) / DAY_IN_MS),
+    Math.round((bookingStart.getTime() - weekStart.getTime()) / DAY_IN_MS),
   );
   const visibleEnd = Math.min(
     7,
-    Math.ceil((bookingEnd.getTime() - weekStart.getTime()) / DAY_IN_MS),
+    Math.round((bookingEnd.getTime() - weekStart.getTime()) / DAY_IN_MS),
   );
 
   if (visibleStart >= visibleEnd) {
@@ -323,6 +89,9 @@ function getBookingPosition(weekStart, booking) {
 
   return { start: visibleStart, duration: visibleEnd - visibleStart };
 }
+
+const apiError = (error) =>
+  error.response?.data?.message || 'Không thể kết nối máy chủ, vui lòng thử lại!';
 
 function SummaryCard({ card }) {
   return (
@@ -390,20 +159,165 @@ function FilterGroup({ label, options, value, onChange, className = '' }) {
 }
 
 function BookingPage() {
-  const [rooms, setRooms] = useState(initialRooms);
+  const navigate = useNavigate();
+  const [rooms, setRooms] = useState([]);
+  const [weekBookings, setWeekBookings] = useState([]);
+  const [todayBookings, setTodayBookings] = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
   const [floorFilter, setFloorFilter] = useState('Tất cả');
   const [typeFilter, setTypeFilter] = useState('Tất cả');
   const [statusFilter, setStatusFilter] = useState('Tất cả');
   const [query, setQuery] = useState('');
-  const [weekStart, setWeekStart] = useState(BASE_WEEK);
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [page, setPage] = useState(1);
   const [bookingDialog, setBookingDialog] = useState(null);
   const [bookingDetail, setBookingDetail] = useState(null);
 
+  const refresh = () => setReloadKey((key) => key + 1);
+
+  const notify = (message, type = 'success') => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500);
+  };
+
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+
+  useEffect(() => {
+    let cancelled = false;
+    const today = toDateInput(new Date());
+
+    (async () => {
+      try {
+        const [roomsRes, weekRes, todayRes] = await Promise.all([
+          getRoomsAPI(),
+          bookingService.getBookings({
+            from: toDateInput(weekStart),
+            to: toDateInput(addDays(weekStart, 6)),
+          }),
+          bookingService.getBookings({ from: today, to: today }),
+        ]);
+        if (cancelled) return;
+        setRooms(roomsRes.data.map(mapRoom));
+        setWeekBookings(weekRes.data.map(mapBooking));
+        setTodayBookings(todayRes.data.map(mapBooking));
+        setLoadError('');
+      } catch (error) {
+        if (!cancelled) setLoadError(apiError(error));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [weekStart, reloadKey]);
+
+  const roomsWithBookings = useMemo(() => {
+    const byId = new Map(rooms.map((room) => [room.id, { ...room, bookings: [] }]));
+    const ordered = [...weekBookings].sort(
+      (a, b) => (a.apiStatus === 'Pending' ? 0 : 1) - (b.apiStatus === 'Pending' ? 0 : 1),
+    );
+
+    ordered.forEach((booking) => {
+      if (booking.apiStatus === 'Cancelled') return;
+      booking.roomRows.forEach((row) => {
+        const room = byId.get(row.roomId);
+        if (!room) return;
+        room.bookings.push({
+          id: booking.id,
+          code: booking.code,
+          guest: booking.guest,
+          guests: row.guests,
+          status: booking.status,
+          checkIn: booking.checkIn,
+          duration: booking.duration,
+        });
+      });
+    });
+
+    return [...byId.values()];
+  }, [rooms, weekBookings]);
+
+  const summaryCards = useMemo(() => {
+    const today = toDateInput(new Date());
+    const occupied = rooms.filter((room) => room.apiStatus === 'Occupied').length;
+    const arrivals = todayBookings.filter(
+      (b) => b.checkIn === today && ['Pending', 'Confirmed'].includes(b.apiStatus),
+    ).length;
+    const departures = todayBookings.filter(
+      (b) => b.checkOut === today && b.apiStatus === 'CheckedIn',
+    ).length;
+    const pending = weekBookings.filter((b) => b.apiStatus === 'Pending').length;
+
+    let usedNights = 0;
+    weekBookings
+      .filter((b) => ['Confirmed', 'CheckedIn', 'Completed'].includes(b.apiStatus))
+      .forEach((booking) => {
+        booking.roomRows.forEach(() => {
+          const position = getBookingPosition(weekStart, booking);
+          if (position) usedNights += position.duration;
+        });
+      });
+    const fillRate = rooms.length ? (usedNights / (rooms.length * 7)) * 100 : 0;
+    const capacity = rooms.length ? (occupied / rooms.length) * 100 : 0;
+    const pad = (n) => String(n).padStart(2, '0');
+
+    return [
+      {
+        title: 'TỔNG LƯỢT ĐẶT',
+        value: String(weekBookings.filter((b) => b.apiStatus !== 'Cancelled').length),
+        detail: 'hồ sơ',
+        note: 'trong tuần đang xem',
+        color: '#075A9C',
+      },
+      {
+        title: 'ĐANG LƯU TRÚ',
+        value: pad(occupied),
+        detail: `/ ${rooms.length} phòng`,
+        note: `Công suất hiện tại: ${capacity.toFixed(1)}%`,
+        color: '#0D8BEA',
+      },
+      {
+        title: 'ĐẾN HÔM NAY',
+        value: pad(arrivals),
+        detail: 'lượt nhận',
+        note: 'Check-in từ 14:00',
+        color: '#2E8B57',
+      },
+      {
+        title: 'ĐI HÔM NAY',
+        value: pad(departures),
+        detail: 'lượt trả',
+        note: 'Check-out trước 12:00',
+        color: '#D97706',
+      },
+      {
+        title: 'LẤP ĐẦY TRONG TUẦN',
+        value: `${fillRate.toFixed(1)}%`,
+        note: 'Đêm có khách / tổng đêm phòng',
+        color: '#075A9C',
+        progress: Math.min(fillRate, 100),
+      },
+      {
+        title: 'CHỜ DUYỆT CỌC',
+        value: pad(pending),
+        detail: 'đơn',
+        note: 'Chưa giữ phòng',
+        color: 'rgba(217,83,79,0.9)',
+      },
+    ];
+  }, [rooms, weekBookings, todayBookings, weekStart]);
+
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('vi');
+    const isRoomStatusFilter = ROOM_STATUS_FILTERS.includes(statusFilter);
 
-    return rooms
+    return roomsWithBookings
       .map((room) => {
         const roomMatchesQuery =
           !normalizedQuery ||
@@ -412,7 +326,9 @@ function BookingPage() {
             .includes(normalizedQuery);
         const filteredBookings = room.bookings.filter((booking) => {
           const matchesStatus =
-            statusFilter === 'Tất cả' || booking.status === statusFilter;
+            statusFilter === 'Tất cả' ||
+            isRoomStatusFilter ||
+            booking.status === statusFilter;
           const matchesQuery =
             !normalizedQuery ||
             roomMatchesQuery ||
@@ -431,7 +347,10 @@ function BookingPage() {
         const matchesType =
           typeFilter === 'Tất cả' || room.type === typeFilter.at(-1);
         const matchesStatus =
-          statusFilter === 'Tất cả' || room.filteredBookings.length > 0;
+          statusFilter === 'Tất cả' ||
+          (isRoomStatusFilter
+            ? room.roomStatus === statusFilter
+            : room.filteredBookings.length > 0);
         const matchesQuery =
           !normalizedQuery ||
           room.roomMatchesQuery ||
@@ -439,111 +358,114 @@ function BookingPage() {
 
         return matchesFloor && matchesType && matchesStatus && matchesQuery;
       });
-  }, [floorFilter, query, rooms, statusFilter, typeFilter]);
+  }, [floorFilter, query, roomsWithBookings, statusFilter, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleRooms.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRooms = visibleRooms.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
 
   const resetFilters = () => {
     setFloorFilter('Tất cả');
     setTypeFilter('Tất cả');
     setStatusFilter('Tất cả');
     setQuery('');
+    setPage(1);
   };
 
-  const handleSaveBooking = (bookingData) => {
-    const editingBooking = bookingDialog?.booking;
-    const bookingCode =
-      editingBooking?.code ||
-      `BK-${weekStart.getFullYear()}-${1023 + rooms.reduce(
-        (totalCount, roomItem) => totalCount + roomItem.bookings.length,
-        0,
-      )}`;
-    const selectedRows = bookingData.roomRows;
-    const bookingBase = {
-      ...editingBooking,
-      guest: bookingData.guest,
-      phone: bookingData.phone,
-      source: bookingData.source,
-      checkIn: bookingData.checkIn,
-      checkOut: bookingData.checkOut,
-      code: bookingCode,
-      status: editingBooking?.status || 'Đã xác nhận',
-      startDay: bookingData.startDay,
-      duration: bookingData.duration,
-      note: bookingData.note,
-      paymentMethod: bookingData.paymentMethod,
-      depositPercent: bookingData.depositPercent,
-      roomRows: selectedRows,
-    };
+  const run = async (action, successMessage) => {
+    if (busy) return false;
+    setBusy(true);
+    try {
+      await action();
+      notify(successMessage, 'success');
+      refresh();
+      return true;
+    } catch (error) {
+      notify(apiError(error), 'error');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
 
-    setRooms((currentRooms) =>
-      currentRooms.map((room) => {
-        const remainingBookings = editingBooking
-          ? room.bookings.filter((item) => item.code !== editingBooking.code)
-          : room.bookings;
-        const row = selectedRows.find(
-          (selectedRoom) => selectedRoom.roomNumber === room.number,
-        );
+  // Mở chi tiết: tải đủ thông tin (kèm danh sách khách) rồi mới mở
+  const openDetail = async (item, room) => {
+    try {
+      const res = await bookingService.getBookingById(item.id);
+      setBookingDetail({ booking: mapBooking(res.data), room });
+    } catch (error) {
+      notify(apiError(error), 'error');
+    }
+  };
 
-        if (!row) {
-          return remainingBookings === room.bookings
-            ? room
-            : { ...room, bookings: remainingBookings };
+  const handleSaveBooking = async (form) => {
+    const editing = bookingDialog?.booking;
+    const payload = formToApiPayload(form, rooms);
+
+    if (payload.Rooms.some((row) => !row.RoomID)) {
+      notify('Vui lòng chọn phòng hợp lệ cho từng dòng.', 'error');
+      return;
+    }
+
+    const roomTotal =
+      form.roomRows.reduce((sum, row) => sum + Number(row.price || 0), 0) *
+      form.duration;
+    const ok = await run(
+      async () => {
+        if (editing) {
+          await bookingService.updateBooking(editing.id, payload);
+        } else {
+          await bookingService.reserve({
+            ...payload,
+            Deposit: Math.ceil((roomTotal * form.depositPercent) / 100),
+          });
         }
-
-        return {
-          ...room,
-          bookings: [
-            ...remainingBookings,
-            {
-              ...bookingBase,
-              guests: Number(row.guests),
-              foreignGuest: row.foreignGuest,
-              price: Number(row.price),
-            },
-          ],
-        };
-      }),
+      },
+      editing ? 'Đã cập nhật đặt phòng' : 'Đã tạo đặt phòng',
     );
-    setBookingDialog(null);
+    if (ok) setBookingDialog(null);
   };
 
-  const updateBookingByCode = (booking, updates) => {
-    if (!booking?.code) return;
+  const handleBookingPrimaryAction = async (booking) => {
+    if (booking.apiStatus === 'CheckedIn') {
+      setBookingDetail(null);
+      navigate('/invoices', { state: { createInvoiceForBookingId: booking.id } });
+      return;
+    }
 
-    setRooms((currentRooms) =>
-      currentRooms.map((roomItem) => ({
-        ...roomItem,
-        ...(updates.status === 'Đang lưu trú' &&
-        roomItem.bookings.some((item) => item.code === booking.code)
-          ? { roomStatus: 'Đang lưu trú' }
-          : updates.status === 'Đã trả/hủy' &&
-              roomItem.bookings.some((item) => item.code === booking.code)
-            ? { roomStatus: 'Sẵn sàng' }
-            : {}),
-        bookings: roomItem.bookings.map((item) =>
-          item.code === booking.code ? { ...item, ...updates } : item,
+    let ok = false;
+    if (booking.apiStatus === 'Pending') {
+      ok = await run(
+        () =>
+          bookingService.confirmDeposit(
+            booking.id,
+            Math.ceil(booking.totalAmount * 0.3),
+          ),
+        'Đã xác nhận cọc, đơn được giữ phòng',
+      );
+    } else if (booking.apiStatus === 'Confirmed') {
+      ok = await run(() => bookingService.checkIn(booking.id), 'Nhận phòng thành công');
+    }
+    if (ok) setBookingDetail(null);
+  };
+
+  const handleCancelBooking = (booking) =>
+    run(() => bookingService.cancelBooking(booking.id), 'Đã hủy đặt phòng');
+
+  // Trả về true/false để drawer biết có đóng cửa sổ nhập khách hay không
+  const handleGuestsChange = (booking, guests, roomRow) =>
+    run(
+      () =>
+        bookingService.updateRoomGuests(
+          booking.id,
+          roomRow.detailId,
+          guests.map(mapGuestToApi),
         ),
-      })),
+      'Đã lưu danh sách khách',
     );
-  };
-
-  const handleBookingPrimaryAction = (booking) => {
-    const nextStatus =
-      booking.status === 'Đang lưu trú'
-        ? 'Đã trả/hủy'
-        : booking.status === 'Đã xác nhận'
-          ? 'Đang lưu trú'
-          : 'Đã xác nhận';
-    updateBookingByCode(booking, { status: nextStatus });
-    setBookingDetail(null);
-  };
-
-  const handleCancelBooking = (booking) => {
-    updateBookingByCode(booking, { status: 'Đã trả/hủy' });
-  };
-
-  const handleGuestProfilesChange = (booking, guestProfiles) => {
-    updateBookingByCode(booking, { guestProfiles });
-  };
 
   const weekDays = weekdays.map((label, index) => ({
     label,
@@ -556,6 +478,14 @@ function BookingPage() {
 
   return (
     <section className="flex w-full min-w-0 flex-col gap-4">
+      {loadError && (
+        <p
+          role="alert"
+          className="rounded-lg border border-[#D9534F] bg-white px-4 py-3 text-sm text-[#D9534F]"
+        >
+          {loadError}
+        </p>
+      )}
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {summaryCards.map((card) => (
           <SummaryCard key={card.title} card={card} />
@@ -696,7 +626,7 @@ function BookingPage() {
               </div>
               {weekDays.map(({ label, date }) => (
                 <div
-                  key={date.toISOString()}
+                  key={toDateInput(date)}
                   className="flex flex-col items-center justify-center border-r border-[#DCECF8] text-xs leading-4 last:border-r-0"
                 >
                   <span className="text-[#526575]">{label}</span>
@@ -707,8 +637,8 @@ function BookingPage() {
               ))}
             </div>
 
-            {visibleRooms.length > 0 ? (
-              visibleRooms.map((room) => {
+            {pagedRooms.length > 0 ? (
+              pagedRooms.map((room) => {
                 const roomColor =
                   room.roomStatus === 'Đang lưu trú'
                     ? '#0D8BEA'
@@ -756,7 +686,7 @@ function BookingPage() {
                     <div className="col-span-7 grid h-full min-w-0 grid-cols-7 grid-rows-1">
                       {weekDays.map(({ date }, index) => (
                         <div
-                          key={date.toISOString()}
+                          key={toDateInput(date)}
                           className="row-start-1 border-r border-[#DCECF8] bg-[rgba(232,245,255,0.5)] last:border-r-0"
                           style={{ gridColumn: index + 1 }}
                         />
@@ -777,13 +707,10 @@ function BookingPage() {
 
                         return (
                           <button
-                            key={`${booking.code || booking.guest}-${index}`}
+                            key={`${booking.code}-${index}`}
                             type="button"
                             title={`${booking.guest}${booking.code ? ` (${booking.code})` : ''}`}
-                            onClick={() =>
-                              booking.code &&
-                              setBookingDetail({ booking, room })
-                            }
+                            onClick={() => openDetail(booking, room)}
                             className={`row-start-1 my-3 flex min-w-0 items-center gap-1 overflow-hidden rounded px-2 text-left text-white ${
                               isShort ? 'justify-center px-1 text-[11px]' : 'text-xs font-bold'
                             }`}
@@ -823,49 +750,43 @@ function BookingPage() {
                 <button
                   type="button"
                   aria-label="Trang trước"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
                   className="rounded px-2 py-1 hover:bg-[#E8F5FF]"
                 >
                   ‹
                 </button>
-                {[1, 2, 3].map((pageNumber) => (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    aria-current={page === pageNumber ? 'page' : undefined}
-                    onClick={() => setPage(pageNumber)}
-                    className={`h-6 min-w-6 rounded px-2 text-sm ${
-                      page === pageNumber
-                        ? 'bg-[#0D8BEA] font-bold text-white'
-                        : 'hover:bg-[#E8F5FF]'
-                    }`}
-                  >
-                    {pageNumber}
-                  </button>
-                ))}
-                <span className="px-1">…</span>
-                <button
-                  type="button"
-                  aria-current={page === 10 ? 'page' : undefined}
-                  onClick={() => setPage(10)}
-                  className={`h-6 min-w-6 rounded px-2 text-sm ${
-                    page === 10
-                      ? 'bg-[#0D8BEA] font-bold text-white'
-                      : 'hover:bg-[#E8F5FF]'
-                  }`}
-                >
-                  10
-                </button>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+                  (pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      aria-current={currentPage === pageNumber ? 'page' : undefined}
+                      onClick={() => setPage(pageNumber)}
+                      className={`h-6 min-w-6 rounded px-2 text-sm ${
+                        currentPage === pageNumber
+                          ? 'bg-[#0D8BEA] font-bold text-white'
+                          : 'hover:bg-[#E8F5FF]'
+                      }`}
+                    >
+                      {pageNumber}
+                    </button>
+                  ),
+                )}
                 <button
                   type="button"
                   aria-label="Trang sau"
-                  onClick={() => setPage((current) => Math.min(10, current + 1))}
+                  onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
                   className="rounded px-2 py-1 hover:bg-[#E8F5FF]"
                 >
                   ›
                 </button>
               </div>
-              <p>Hiển thị 1–10 trên tổng 100 phòng</p>
+              <p>
+                Hiển thị{' '}
+                {visibleRooms.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–
+                {Math.min(currentPage * PAGE_SIZE, visibleRooms.length)} trên tổng{' '}
+                {visibleRooms.length} phòng
+              </p>
             </div>
           </div>
         </div>
@@ -883,7 +804,7 @@ function BookingPage() {
       )}
       {bookingDetail && (
         <BookingDetailDrawer
-          key={bookingDetail.booking.code}
+          key={bookingDetail.booking.id}
           booking={bookingDetail.booking}
           room={bookingDetail.room}
           onClose={() => setBookingDetail(null)}
@@ -893,9 +814,10 @@ function BookingPage() {
           }}
           onPrimaryAction={handleBookingPrimaryAction}
           onCancelBooking={handleCancelBooking}
-          onGuestsChange={handleGuestProfilesChange}
+          onGuestsChange={handleGuestsChange}
         />
       )}
+      {toast && <ToastNotification message={toast.message} type={toast.type} />}
     </section>
   );
 }

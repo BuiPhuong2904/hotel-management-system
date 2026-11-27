@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FiChevronDown, FiX } from 'react-icons/fi';
+import { FiDownload, FiMail, FiX } from 'react-icons/fi';
 
 const formatCurrency = (value) =>
   `${new Intl.NumberFormat('vi-VN').format(Math.round(value || 0))} đ`;
 
 const getRoomTotal = (room) =>
   room.days * room.nightlyRate +
+  room.timeSurcharge +
   room.services.reduce((sum, item) => sum + item.amount, 0);
 
 const formatDateTime = (value) => {
@@ -24,22 +25,8 @@ const statusStyles = {
   'Đã hủy': 'bg-[#526575]',
 };
 
-function InvoiceDetailDrawer({
-  invoice,
-  paymentChoices,
-  onClose,
-  onPayment,
-  onPrint,
-}) {
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [method, setMethod] = useState(
-    paymentChoices.includes(invoice.paymentMethod)
-      ? invoice.paymentMethod
-      : 'Tiền mặt',
-  );
-  const canCollect = ['Chờ thanh toán', 'Lỗi thanh toán'].includes(
-    invoice.status,
-  );
+function InvoiceDetailDrawer({ invoice, onClose, onPrint, onEmail }) {
+  const [emailInput, setEmailInput] = useState('');
   const roomFeeTotal = invoice.rooms.reduce(
     (sum, room) => sum + room.days * room.nightlyRate,
     0,
@@ -52,14 +39,11 @@ function InvoiceDetailDrawer({
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        if (paymentDialogOpen) setPaymentDialogOpen(false);
-        else onClose();
-      }
+      if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, paymentDialogOpen]);
+  }, [onClose]);
 
   return (
     <div
@@ -99,8 +83,8 @@ function InvoiceDetailDrawer({
             </button>
           </div>
           <p className="mt-1 text-xs text-[#526575]">
-            Thời gian lập: {formatDateTime(invoice.date)} • Thu ngân:{' '}
-            {invoice.cashier} • Phiếu thuê: {invoice.bookingCode}
+            Thanh toán lúc: {formatDateTime(invoice.date)} • Thu ngân:{' '}
+            {invoice.cashier} • Phiếu thuê: BK-{invoice.bookingId}
           </p>
         </header>
 
@@ -202,6 +186,14 @@ function InvoiceDetailDrawer({
                         </span>
                       </div>
                     ))}
+                    {room.timeSurcharge > 0 && (
+                      <div className="flex justify-between gap-3 text-[#526575]">
+                        <span>Phụ thu nhận sớm / trả muộn:</span>
+                        <span className="text-[#1E293B]">
+                          {formatCurrency(room.timeSurcharge)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-3 pt-1 font-bold">
                       <span className="text-[#526575]">
                         Tạm tính P.{room.number.replace(/^P\./, '')}:
@@ -224,8 +216,34 @@ function InvoiceDetailDrawer({
                 <dd className="text-[#1E293B]">{formatCurrency(roomFeeTotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
+                <dt className="text-[#526575]">Phụ thu nhận sớm / trả muộn:</dt>
+                <dd className="text-[#1E293B]">
+                  {formatCurrency(invoice.timeSurchargeTotal)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
                 <dt className="text-[#526575]">Tổng tiền dịch vụ:</dt>
                 <dd className="text-[#1E293B]">{formatCurrency(serviceTotal)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#526575]">Giảm giá (khuyến mãi):</dt>
+                <dd className="text-[#D9534F]">
+                  - {formatCurrency(invoice.discount)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#526575]">
+                  Thuế VAT ({Math.round(invoice.vatRate * 10000) / 100}%):
+                </dt>
+                <dd className="text-[#1E293B]">
+                  {formatCurrency(invoice.vatAmount)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3 border-t border-[#DCECF8] pt-3 font-bold">
+                <dt className="text-[#526575]">TỔNG CỘNG:</dt>
+                <dd className="text-[#075A9C]">
+                  {formatCurrency(invoice.totalAmount)}
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-[#526575]">Đã trừ cọc:</dt>
@@ -233,16 +251,8 @@ function InvoiceDetailDrawer({
                   - {formatCurrency(invoice.deposit)}
                 </dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-[#526575]">
-                  Giảm giá{invoice.discountReason ? ` (${invoice.discountReason})` : ''}:
-                </dt>
-                <dd className="text-[#D9534F]">
-                  - {formatCurrency(invoice.discount)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3 border-t border-[#DCECF8] pt-3 font-bold">
-                <dt className="text-[#526575]">KHÁCH CẦN TRẢ:</dt>
+              <div className="flex justify-between gap-3 font-bold">
+                <dt className="text-[#526575]">KHÁCH ĐÃ THANH TOÁN THÊM:</dt>
                 <dd className="text-[#075A9C]">
                   {formatCurrency(invoice.amountDue)}
                 </dd>
@@ -258,95 +268,35 @@ function InvoiceDetailDrawer({
         </div>
 
         <footer className="flex shrink-0 flex-col gap-3 border-t border-[#DCECF8] bg-white px-4 py-4">
-          {canCollect && (
-            <button
-              type="button"
-              onClick={() => setPaymentDialogOpen(true)}
-              className="flex h-12 items-center justify-center rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white hover:bg-[#075A9C]"
-            >
-              Xác nhận thu tiền
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onPrint(invoice)}
-            className="flex h-10 items-center justify-center rounded-lg border border-[#DCECF8] bg-[#E8F5FF] px-4 text-sm font-bold text-[#0D8BEA] hover:bg-[#DCECF8]"
+            className="flex h-12 items-center justify-center gap-2 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white hover:bg-[#075A9C]"
           >
-            In hóa đơn (VAT)
+            <FiDownload aria-hidden="true" className="h-4 w-4" />
+            Tải hóa đơn PDF (VAT)
           </button>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(event) => setEmailInput(event.target.value)}
+              placeholder="Email nhận hóa đơn (bỏ trống = email của khách)"
+              aria-label="Email nhận hóa đơn"
+              className="h-10 min-w-0 flex-1 rounded-lg border border-[#DCECF8] bg-white px-3 text-xs text-[#526575] outline-none focus:border-[#0D8BEA]"
+            />
+            <button
+              type="button"
+              onClick={() => onEmail(invoice, emailInput.trim())}
+              className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#DCECF8] bg-[#E8F5FF] px-4 text-sm font-bold text-[#0D8BEA] hover:bg-[#DCECF8]"
+            >
+              <FiMail aria-hidden="true" className="h-4 w-4" />
+              Gửi email
+            </button>
+          </div>
         </footer>
       </aside>
 
-      {paymentDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setPaymentDialogOpen(false);
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="payment-method-title"
-            className="w-full max-w-[420px] rounded-xl border border-[#DCECF8] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.16)]"
-          >
-            <div className="flex items-center justify-between">
-              <h3
-                id="payment-method-title"
-                className="text-lg font-bold text-[#075A9C]"
-              >
-                Xác nhận thu tiền
-              </h3>
-              <button
-                type="button"
-                aria-label="Đóng chọn phương thức"
-                onClick={() => setPaymentDialogOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded text-[#526575] hover:bg-[#F7FBFF]"
-              >
-                <FiX aria-hidden="true" />
-              </button>
-            </div>
-            <label className="mt-5 flex flex-col gap-2 text-sm font-bold text-[#075A9C]">
-              Phương thức thanh toán
-              <span className="relative flex h-10 items-center">
-                <select
-                  value={method}
-                  onChange={(event) => setMethod(event.target.value)}
-                  className="h-10 w-full appearance-none rounded-lg border border-[#DCECF8] bg-white px-4 pr-10 text-sm font-normal text-[#526575] outline-none focus:border-[#0D8BEA]"
-                >
-                  {paymentChoices.map((choice) => (
-                    <option key={choice} value={choice}>
-                      {choice}
-                    </option>
-                  ))}
-                </select>
-                <FiChevronDown
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3 h-5 w-5 text-[#526575]"
-                />
-              </span>
-            </label>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setPaymentDialogOpen(false)}
-                className="h-10 rounded-lg border border-[#DCECF8] bg-[#E8F5FF] px-4 text-sm font-bold text-[#0D8BEA]"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={() => onPayment(invoice, method)}
-                className="h-10 rounded-lg bg-[#0D8BEA] px-4 text-sm font-bold text-white hover:bg-[#075A9C]"
-              >
-                Xác nhận thu tiền
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }
