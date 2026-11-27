@@ -41,32 +41,22 @@ function getRoomRow(room, index = 0) {
     roomType: room?.type || 'A',
     roomNumber: room?.number || '',
     guests: '2',
-    foreignGuest: index === 0,
+    foreignGuest: false,
     price: parsePrice(room?.price),
   };
 }
 
 function createInitialForm(booking, room, rooms) {
   if (!booking) {
-    const firstRoom = rooms[0];
-    const secondRoom = rooms[1];
+    const firstRoom =
+      rooms.find((item) => item.apiStatus !== 'Maintenance') || rooms[0];
     return {
       guest: '',
       phone: '',
       source: sourceOptions[0],
-      checkIn: '2026-11-01',
-      checkOut: '2026-11-02',
-      roomRows: [
-        {
-          ...getRoomRow(firstRoom),
-          foreignGuest: true,
-          price: parsePrice(firstRoom?.price) * 1.5,
-        },
-        {
-          ...getRoomRow(secondRoom, 1),
-          foreignGuest: false,
-        },
-      ],
+      checkIn: toDateInput(new Date()),
+      checkOut: toDateInput(new Date(Date.now() + 24 * 60 * 60 * 1000)),
+      roomRows: [getRoomRow(firstRoom)],
       note: '',
       paymentMethod: paymentOptions[0],
       depositPercent: 30,

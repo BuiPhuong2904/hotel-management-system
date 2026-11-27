@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiChevronLeft,
   FiChevronRight,
@@ -11,6 +12,9 @@ import {
 import CreateInvoiceDrawer from '../components/CreateInvoiceModal';
 import InvoiceDetailDrawer from '../components/InvoiceDetailDrawer';
 import ToastNotification from '../components/ToastNotification';
+import invoiceService from '../services/invoiceService';
+import { toDateInput } from '../utils/bookingMapper';
+import { mapInvoiceDetail, mapInvoiceSummary } from '../utils/invoiceMapper';
 
 const paymentChoices = [
   'Tiền mặt',
@@ -18,312 +22,8 @@ const paymentChoices = [
   'Thẻ tín dụng',
 ];
 
-const room = (number, type, days, nightlyRate, services = []) => ({
-  number,
-  type,
-  days,
-  nightlyRate,
-  services,
-});
-
-const service = (name, quantity, unit, amount) => ({
-  name,
-  quantity,
-  unit,
-  amount,
-});
-
-const makeSingleRoomInvoice = ({
-  code,
-  customer,
-  phone,
-  bookingCode,
-  totalAmount,
-  deposit,
-  status,
-  date,
-  paymentMethod,
-  roomNumber,
-  roomType = 'A',
-  days = 2,
-  discount = 0,
-  cashier = 'Trần B',
-  billingName = customer,
-  billingAddress = '123 Lê Lợi, TP.HCM',
-  services = [],
-}) => ({
-  id: code,
-  code,
-  customer,
-  phone,
-  billingName,
-  billingAddress,
-  bookingCode,
-  totalAmount,
-  deposit,
-  discount,
-  discountReason: '',
-  amountDue:
-    status === 'Đã thanh toán' || status === 'Đã hủy'
-      ? 0
-      : Math.max(totalAmount - deposit - discount, 0),
-  status,
-  date,
-  cashier,
-  paymentMethod,
-  rooms: [
-    room(
-      roomNumber,
-      roomType,
-      days,
-      (totalAmount - services.reduce((sum, item) => sum + item.amount, 0)) /
-        days,
-      services,
-    ),
-  ],
-});
-
-const initialInvoices = [
-  {
-    id: 'INV-2026-1024-001',
-    code: 'INV-2026-1024-001',
-    customer: 'Nguyễn Minh Anh',
-    phone: '0912839123',
-    billingName: 'Nguyễn Minh Anh / Công ty TNHH ABC',
-    billingAddress: '123 Lê Lợi, TP.HCM',
-    bookingCode: 'BK-2026-1011',
-    totalAmount: 2000000,
-    deposit: 600000,
-    discount: 0,
-    discountReason: '',
-    amountDue: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-24T14:30:00',
-    cashier: 'Trần B',
-    paymentMethod: 'Chuyển khoản ngân hàng',
-    rooms: [
-      room('101', 'A', 2, 500000, [
-        service('Giặt ủi', 1, 'bộ', 40000),
-        service('Nước suối', 2, 'chai', 60000),
-      ]),
-      room('102', 'B', 2, 400000, [
-        service('Bữa sáng', 1, 'suất', 100000),
-      ]),
-    ],
-  },
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1024-002',
-    customer: 'Trần Thị Mai',
-    phone: '0977123456',
-    bookingCode: 'BK-2026-1012',
-    totalAmount: 850000,
-    deposit: 0,
-    status: 'Chờ thanh toán',
-    date: '2026-10-24T13:45:00',
-    paymentMethod: 'Tiền mặt',
-    roomNumber: '105',
-    services: [service('Nước suối', 1, 'chai', 50000)],
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1024-003',
-    customer: 'David',
-    phone: '0904551234',
-    bookingCode: 'BK-2026-1013',
-    totalAmount: 5000000,
-    deposit: 2500000,
-    status: 'Chờ thanh toán',
-    date: '2026-10-24T12:15:00',
-    paymentMethod: 'Chuyển khoản ngân hàng',
-    roomNumber: '201',
-    roomType: 'VIP',
-    days: 4,
-    billingName: 'David / David Trading',
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1024-004',
-    customer: 'Lê Thu Hà',
-    phone: '0936994789',
-    bookingCode: 'BK-2026-1014',
-    totalAmount: 864000,
-    deposit: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-24T11:30:00',
-    paymentMethod: 'Thẻ tín dụng',
-    roomNumber: '108',
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1024-005',
-    customer: 'Phạm Quốc Bảo',
-    phone: '0981334888',
-    bookingCode: 'BK-2026-1015',
-    totalAmount: 526000,
-    deposit: 0,
-    status: 'Lỗi thanh toán',
-    date: '2026-10-24T10:20:00',
-    paymentMethod: 'Thẻ tín dụng',
-    roomNumber: '110',
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1023-006',
-    customer: 'Hoàng Đức Vinh',
-    phone: '0918765432',
-    bookingCode: 'BK-2026-1016',
-    totalAmount: 162000,
-    deposit: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-23T16:10:00',
-    paymentMethod: 'Tiền mặt',
-    roomNumber: '111',
-    days: 1,
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1023-007',
-    customer: 'Vũ Phương Thảo',
-    phone: '0945678123',
-    bookingCode: 'BK-2026-1017',
-    totalAmount: 1144800,
-    deposit: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-23T14:50:00',
-    paymentMethod: 'Chuyển khoản ngân hàng',
-    roomNumber: '202',
-    days: 3,
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1022-008',
-    customer: 'Đặng Quang Huy',
-    phone: '0908123999',
-    bookingCode: 'BK-2026-1018',
-    totalAmount: 2052000,
-    deposit: 1000000,
-    status: 'Chờ thanh toán',
-    date: '2026-10-22T17:10:00',
-    paymentMethod: 'Chuyển khoản ngân hàng',
-    roomNumber: '203',
-    days: 3,
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1022-009',
-    customer: 'Ngô Thành Tùng',
-    phone: '0967888999',
-    bookingCode: 'BK-2026-1019',
-    totalAmount: 237600,
-    deposit: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-22T15:40:00',
-    paymentMethod: 'Tiền mặt',
-    roomNumber: '106',
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1021-010',
-    customer: 'Emma Watson',
-    phone: '0911223344',
-    bookingCode: 'BK-2026-1020',
-    totalAmount: 1620000,
-    deposit: 0,
-    status: 'Đã hủy',
-    date: '2026-10-21T09:00:00',
-    paymentMethod: '—',
-    roomNumber: '301',
-    roomType: 'VIP',
-    days: 3,
-  }),
-  makeSingleRoomInvoice({
-    code: 'INV-2026-1020-011',
-    customer: 'Nguyễn Hoàng Yến',
-    phone: '0903112233',
-    bookingCode: 'BK-2026-1021',
-    totalAmount: 916000,
-    deposit: 0,
-    status: 'Đã thanh toán',
-    date: '2026-10-20T14:00:00',
-    paymentMethod: 'Chuyển khoản ngân hàng',
-    roomNumber: '112',
-  }),
-];
-
-const initialBookings = [
-  {
-    code: 'BK-2026-1011',
-    representative: 'Nguyễn Minh Anh',
-    status: 'Completed',
-    deposit: 600000,
-    billingName: 'Nguyễn Minh Anh / Công ty TNHH ABC',
-    phone: '0912839123',
-    address: '123 Lê Lợi, TP.HCM',
-    rooms: [
-      room('101', 'A', 2, 500000, [
-        service('Giặt ủi', 1, 'bộ', 40000),
-        service('Nước suối', 2, 'chai', 60000),
-      ]),
-      room('102', 'B', 2, 400000, [
-        service('Bữa sáng', 1, 'suất', 100000),
-      ]),
-    ],
-  },
-  {
-    code: 'BK-2026-1012',
-    representative: 'Trần Thị Mai',
-    status: 'CheckedIn',
-    deposit: 500000,
-    billingName: 'Trần Thị Mai',
-    phone: '0977123456',
-    address: '45 Nguyễn Huệ, TP.HCM',
-    rooms: [
-      room('101', 'A', 2, 500000, [
-        service('Giặt ủi', 1, 'bộ', 40000),
-        service('Nước suối', 2, 'chai', 60000),
-      ]),
-      room('102', 'B', 2, 350000),
-    ],
-  },
-  {
-    code: 'BK-2026-1013',
-    representative: 'David',
-    status: 'Completed',
-    deposit: 250000,
-    billingName: 'David / David Trading',
-    phone: '0904551234',
-    address: '88 Đồng Khởi, TP.HCM',
-    rooms: [room('201', 'VIP', 2, 500000, [service('Minibar', 1, 'lần', 50000)])],
-  },
-  {
-    code: 'BK-2026-1022',
-    representative: 'Lê Thị Hương',
-    status: 'Confirmed',
-    deposit: 300000,
-    billingName: 'Lê Thị Hương',
-    phone: '0909112233',
-    address: '',
-    rooms: [room('107', 'A', 2, 450000)],
-  },
-  {
-    code: 'BK-2026-1026',
-    representative: 'Nguyễn Văn A',
-    status: 'CheckedIn',
-    deposit: 500000,
-    billingName: 'Nguyễn Văn A',
-    phone: '0912839123',
-    address: '123 Lê Lợi, TP.HCM',
-    rooms: [
-      room('P.101', 'Loại A', 2, 500000, [
-        service('Giặt ủi', 1, 'bộ', 40000),
-        service('Nước suối', 2, 'chai', 60000),
-      ]),
-      room('P.102', 'Loại B', 2, 350000),
-    ],
-  },
-  {
-    code: 'BK-2026-1027',
-    representative: 'Phạm Thu Trang',
-    status: 'Completed',
-    deposit: 0,
-    billingName: 'Phạm Thu Trang',
-    phone: '0938123456',
-    address: '12 Trần Hưng Đạo, TP.HCM',
-    rooms: [room('P.205', 'Loại A', 2, 600000, [service('Minibar', 1, 'lần', 50000)])],
-  },
-];
+const apiError = (error) =>
+  error.response?.data?.message || 'Không thể kết nối máy chủ, vui lòng thử lại!';
 
 const statusStyles = {
   'Đã thanh toán': 'bg-[#2E8B57]',
@@ -342,10 +42,6 @@ const formatDate = (value) => {
   ).padStart(2, '0')}/${date.getFullYear()}`;
 };
 
-const getRoomTotal = (roomItem) =>
-  roomItem.days * roomItem.nightlyRate +
-  roomItem.services.reduce((sum, item) => sum + item.amount, 0);
-
 function StatusBadge({ status }) {
   return (
     <span
@@ -357,9 +53,17 @@ function StatusBadge({ status }) {
 }
 
 function InvoicePage() {
-  const [invoices, setInvoices] = useState(initialInvoices);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Khi bấm "Thanh toán và trả phòng" ở trang Đặt phòng sẽ mở sẵn form lập hóa đơn
+  const [startBookingId] = useState(
+    () => location.state?.createInvoiceForBookingId ?? null,
+  );
+  const [invoices, setInvoices] = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [createOpen, setCreateOpen] = useState(Boolean(startBookingId));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
@@ -367,6 +71,11 @@ function InvoicePage() {
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
   const [toast, setToast] = useState({ message: '', type: 'error' });
+  const selectedInvoiceId = selectedInvoice?.id ?? null;
+
+  useEffect(() => {
+    if (startBookingId) navigate('/invoices', { replace: true, state: null });
+  }, [navigate, startBookingId]);
 
   useEffect(() => {
     if (!toast.message) return undefined;
@@ -377,17 +86,31 @@ function InvoicePage() {
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
 
-  const selectedInvoice =
-    invoices.find((invoice) => invoice.id === selectedInvoiceId) || null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await invoiceService.getInvoices();
+        if (cancelled) return;
+        setInvoices(res.data.map(mapInvoiceSummary));
+        setLoadError('');
+      } catch (error) {
+        if (!cancelled) setLoadError(apiError(error));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const filteredInvoices = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('vi');
     return invoices.filter((invoice) => {
       const matchesSearch =
         !query ||
-        [invoice.code, invoice.bookingCode, invoice.customer]
-          .some((value) => value.toLocaleLowerCase('vi').includes(query));
-      const invoiceDate = invoice.date.slice(0, 10);
+        [invoice.code, `BK-${invoice.bookingId}`, invoice.customer, invoice.phone]
+          .some((value) => String(value).toLocaleLowerCase('vi').includes(query));
+      const invoiceDate = toDateInput(new Date(invoice.date));
       return (
         matchesSearch &&
         (!statusFilter || invoice.status === statusFilter) &&
@@ -412,91 +135,59 @@ function InvoicePage() {
     (sum, invoice) => sum + invoice.totalAmount,
     0,
   );
-  const pendingCount = invoices.filter(
-    (invoice) => invoice.status === 'Chờ thanh toán',
-  ).length;
-  const failedCount = invoices.filter(
-    (invoice) => invoice.status === 'Lỗi thanh toán',
-  ).length;
+  const vatTotal = paidInvoices.reduce((sum, invoice) => sum + invoice.vatAmount, 0);
+  const discountTotal = paidInvoices.reduce((sum, invoice) => sum + invoice.discount, 0);
 
-  const openInvoice = (invoice) => setSelectedInvoiceId(invoice.id);
-  const closeInvoice = () => setSelectedInvoiceId(null);
+  const openInvoice = async (invoice) => {
+    try {
+      const res = await invoiceService.getInvoiceById(invoice.id);
+      setSelectedInvoice(mapInvoiceDetail(res.data));
+    } catch (error) {
+      setToast({ message: apiError(error), type: 'error' });
+    }
+  };
+  const closeInvoice = () => setSelectedInvoice(null);
 
-  const handleCreateInvoice = (
-    booking,
-    discount,
-    discountReason,
-    method,
-    reference,
-  ) => {
-    const totalAmount = booking.rooms.reduce(
-      (sum, roomItem) => sum + getRoomTotal(roomItem),
-      0,
-    );
-    const amountDue = Math.max(
-      totalAmount - booking.deposit - discount,
-      0,
-    );
-    const createdAt = new Date();
-    const newInvoice = {
-      id: `INV-${Date.now()}`,
-      code: `INV-${createdAt.getFullYear()}-${String(
-        createdAt.getMonth() + 1,
-      ).padStart(2, '0')}${String(createdAt.getDate()).padStart(2, '0')}-${String(
-        invoices.length + 1,
-      ).padStart(3, '0')}`,
-      customer: booking.representative,
-      phone: booking.phone,
-      billingName: booking.billingName,
-      billingAddress: booking.address || '—',
-      bookingCode: booking.code,
-      totalAmount,
-      deposit: booking.deposit,
-      discount,
-      discountReason,
-      amountDue,
-      status: 'Chờ thanh toán',
-      date: createdAt.toISOString(),
-      cashier: 'Trần B',
-      paymentMethod: method,
-      transactionReference: reference,
-      rooms: booking.rooms,
-    };
-    setInvoices((currentInvoices) => [newInvoice, ...currentInvoices]);
-    setPage(1);
+
+  const handleCreateInvoice = async (payload) => {
+    const res = await invoiceService.createInvoice(payload);
     setCreateOpen(false);
+    setPage(1);
+    setReloadKey((key) => key + 1);
     setToast({
-      message: `Đã lập hóa đơn ${newInvoice.code} thành công.`,
+      message: `Đã lập hóa đơn INV-${String(res.data.InvoiceID).padStart(4, '0')} và hoàn tất trả phòng.`,
       type: 'success',
     });
+    setSelectedInvoice(mapInvoiceDetail(res.data));
   };
 
-  const handlePayment = (invoice, method) => {
-    setInvoices((currentInvoices) =>
-      currentInvoices.map((item) =>
-        item.id === invoice.id
-          ? {
-              ...item,
-              status: 'Đã thanh toán',
-              amountDue: 0,
-              paymentMethod: method,
-              paidAt: new Date().toISOString(),
-            }
-          : item,
-      ),
-    );
-    closeInvoice();
-    setToast({
-      message: `Đã xác nhận thu tiền hóa đơn ${invoice.code}.`,
-      type: 'success',
-    });
+  const handlePrint = async (invoice) => {
+    try {
+      const blob = await invoiceService.downloadPdf(invoice.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoice.code}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setToast({ message: 'Không thể tải file PDF hóa đơn.', type: 'error' });
+    }
   };
 
-  const handlePrint = (invoice) =>
-    setToast({
-      message: `Đã xuất hóa đơn VAT ${invoice.code} thành công.`,
-      type: 'success',
-    });
+  const handleEmail = async (invoice, email) => {
+    try {
+      const res = await invoiceService.sendEmail(invoice.id, email || undefined);
+      setToast({
+        message: res.message || `Đã gửi hóa đơn ${invoice.code}.`,
+        type: 'success',
+      });
+    } catch (error) {
+      setToast({ message: apiError(error), type: 'error' });
+    }
+  };
 
   const clearFilters = () => {
     setSearch('');
@@ -514,6 +205,14 @@ function InvoicePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      {loadError && (
+        <p
+          role="alert"
+          className="rounded-lg border border-[#D9534F] bg-white px-4 py-3 text-sm text-[#D9534F]"
+        >
+          {loadError}
+        </p>
+      )}
       <section
         aria-label="Thống kê hóa đơn"
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
@@ -533,33 +232,21 @@ function InvoicePage() {
               hóa đơn
             </span>
           </p>
-          <p className="text-xs text-[#526575]">
-            So với hôm qua: <span className="text-[#2E8B57]">+15%</span>
-          </p>
+          <p className="text-xs text-[#526575]">Hóa đơn đã ghi nhận thanh toán</p>
         </article>
         <article className="flex h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#D97706]">CHỜ THANH TOÁN</h2>
+          <h2 className="text-sm font-bold text-[#D97706]">THUẾ VAT ĐÃ THU</h2>
           <p className="pt-2 text-xl font-bold text-[#D97706]">
-            {String(pendingCount).padStart(2, '0')}
-            <span className="ml-2 text-xs font-normal text-[#526575]">
-              hóa đơn
-            </span>
+            {formatCurrency(vatTotal)}
           </p>
-          <p className="text-xs text-[#526575]">
-            So với hôm qua: <span className="text-[#2E8B57]">+15%</span>
-          </p>
+          <p className="text-xs text-[#526575]">Tổng VAT các hóa đơn đã thanh toán</p>
         </article>
         <article className="flex h-[136px] flex-col gap-2 rounded-xl border border-[#DCECF8] bg-white p-[17px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
-          <h2 className="text-sm font-bold text-[#D9534F]">LỖI THANH TOÁN</h2>
+          <h2 className="text-sm font-bold text-[#D9534F]">ĐÃ GIẢM GIÁ</h2>
           <p className="pt-2 text-xl font-bold text-[#D9534F]">
-            {String(failedCount).padStart(2, '0')}
-            <span className="ml-2 text-xs font-normal text-[#526575]">
-              hóa đơn
-            </span>
+            {formatCurrency(discountTotal)}
           </p>
-          <p className="text-xs text-[#526575]">
-            {failedCount ? 'Cần kiểm tra giao dịch' : 'Không có dữ liệu'}
-          </p>
+          <p className="text-xs text-[#526575]">Tổng khuyến mãi đã áp dụng</p>
         </article>
       </section>
 
@@ -860,9 +547,8 @@ function InvoicePage() {
 
       {createOpen && (
         <CreateInvoiceDrawer
-          bookings={initialBookings}
-          invoices={invoices}
           paymentChoices={paymentChoices}
+          initialBookingId={startBookingId}
           onClose={() => setCreateOpen(false)}
           onCreate={handleCreateInvoice}
         />
@@ -870,10 +556,9 @@ function InvoicePage() {
       {selectedInvoice && (
         <InvoiceDetailDrawer
           invoice={selectedInvoice}
-          paymentChoices={paymentChoices}
           onClose={closeInvoice}
-          onPayment={handlePayment}
           onPrint={handlePrint}
+          onEmail={handleEmail}
         />
       )}
       <ToastNotification message={toast.message} type={toast.type} />

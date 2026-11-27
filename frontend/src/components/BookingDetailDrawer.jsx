@@ -75,16 +75,17 @@ function BookingDetailDrawer({
   onGuestsChange,
   onAddService,
 }) {
-  const [guestModalOpen, setGuestModalOpen] = useState(false);
-  const [guestProfiles, setGuestProfiles] = useState(
-    () => booking?.guestProfiles || [],
+  const [guestModalIndex, setGuestModalIndex] = useState(null);
+  const [roomGuests, setRoomGuests] = useState(() =>
+    (booking?.roomRows || []).map((row) => row.guestProfiles || []),
   );
+  const guestModalOpen = guestModalIndex !== null;
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key !== 'Escape') return;
       if (guestModalOpen) {
-        setGuestModalOpen(false);
+        setGuestModalIndex(null);
       } else {
         onClose();
       }
@@ -131,10 +132,7 @@ function BookingDetailDrawer({
     (sum, service) => sum + getAmount(service.amount ?? service.price),
     0,
   );
-  const primaryGuest = guestProfiles.find((guest) => guest.name)?.name || booking.guest;
-  const filledGuests = guestProfiles.filter(
-    (guest) => guest.name?.trim() && guest.identity?.trim(),
-  ).length || (booking.guest ? 1 : 0);
+  const primaryGuest = booking.guest;
   const guestCapacity = roomRows.reduce(
     (sum, roomRow) => sum + Number(roomRow.guests || 0),
     0,
@@ -145,10 +143,16 @@ function BookingDetailDrawer({
     onCancelBooking?.(booking);
     onClose();
   };
-  const saveGuests = (updatedGuests) => {
-    setGuestProfiles(updatedGuests);
-    onGuestsChange?.(booking, updatedGuests);
-    setGuestModalOpen(false);
+  const saveGuests = async (updatedGuests) => {
+    const index = guestModalIndex;
+    const saved = await onGuestsChange?.(booking, updatedGuests, roomRows[index]);
+    if (saved === false) return;
+    setRoomGuests((current) => {
+      const next = [...current];
+      next[index] = updatedGuests;
+      return next;
+    });
+    setGuestModalIndex(null);
   };
 
   const primaryAction =
@@ -186,7 +190,11 @@ function BookingDetailDrawer({
                 <span
                   className={`rounded-full px-2.5 py-1 text-xs font-semibold text-white ${statusStyles[statusKind]}`}
                 >
-                  {isCancelled ? 'Đã hủy' : booking.status}
+                  {isCancelled
+                    ? booking.apiStatus === 'Completed'
+                      ? 'Đã hoàn tất'
+                      : 'Đã hủy'
+                    : booking.status}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#526575]">
@@ -221,7 +229,7 @@ function BookingDetailDrawer({
               <p className="mt-1 text-lg font-bold text-[#075A9C]">
                 {formatCurrency(total)}
               </p>
-              <p className="text-xs text-[#526575]">Đã gồm VAT &amp; Phí</p>
+              <p className="text-xs text-[#526575]">Chưa gồm VAT (tính khi lập hóa đơn)</p>
             </div>
             <div className="border-b border-[#DCECF8] pb-3 sm:border-b-0 sm:border-r sm:px-1 sm:pb-0 sm:pr-3">
               <p className="text-xs font-bold text-[#526575]">CÒN PHẢI THU</p>
@@ -262,7 +270,7 @@ function BookingDetailDrawer({
                 value={formatDate(checkOutDate)}
                 valueClass="text-[#D97706]"
               />
-              {isCancelled && (
+              {isCancelled && booking.apiStatus !== 'Completed' && (
                 <div className="sm:col-span-2">
                   <DetailRow
                     label="Lý do hủy:"
@@ -284,9 +292,7 @@ function BookingDetailDrawer({
             </div>
             <div className="divide-y divide-[#DCECF8]">
               {roomRows.map((roomRow, index) => {
-                const hasGuestList =
-                  Boolean(guestProfiles.length) && index === 0;
-                const roomProfiles = hasGuestList ? guestProfiles : [];
+                const roomProfiles = roomGuests[index] || [];
                 const completedCount = roomProfiles.filter(
                   (guest) => guest.name?.trim() && guest.identity?.trim(),
                 ).length;
@@ -304,12 +310,11 @@ function BookingDetailDrawer({
                       {!isCancelled && (
                         <button
                           type="button"
-                          onClick={() => setGuestModalOpen(true)}
+                          onClick={() => setGuestModalIndex(index)}
                           className="mt-1 text-left text-xs text-[#0D8BEA] hover:underline"
                         >
                           [+] Cập nhật danh sách khách (Đã nhập{' '}
-                          {hasGuestList ? completedCount : filledGuests}/
-                          {roomRow.guests || guestCapacity})
+                          {completedCount}/{roomRow.guests || guestCapacity})
                         </button>
                       )}
                     </div>
@@ -370,7 +375,11 @@ function BookingDetailDrawer({
           <section className="flex gap-2.5 rounded-xl border border-[#DCECF8] bg-[#F7FBFF] p-3 text-xs leading-5 text-[#526575]">
             <FiInfo aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#0D8BEA]" />
             {isCancelled ? (
-              <p>Đơn đặt phòng này đã bị hủy. Không phát sinh thêm giao dịch tài chính.</p>
+              <p>
+                {booking.apiStatus === 'Completed'
+                  ? 'Đơn đặt phòng này đã hoàn tất và đã lập hóa đơn.'
+                  : 'Đơn đặt phòng này đã bị hủy. Không phát sinh thêm giao dịch tài chính.'}
+              </p>
             ) : (
               <p>
                 Khách đã thanh toán cọc{' '}
@@ -418,7 +427,7 @@ function BookingDetailDrawer({
                   type="button"
                   onClick={
                     statusKind === 'staying'
-                      ? openPrint
+                      ? () => onPrimaryAction?.(booking)
                       : () => onEdit?.(booking, room)
                   }
                   className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#DCECF8] bg-[#E8F5FF] px-2 text-sm font-bold text-[#0D8BEA] hover:bg-[#DCECF8]"
@@ -473,10 +482,10 @@ function BookingDetailDrawer({
       {guestModalOpen && (
         <GuestListModal
           isOpen={guestModalOpen}
-          room={roomRows[0] || room}
-          guests={guestProfiles}
+          room={roomRows[guestModalIndex] || room}
+          guests={roomGuests[guestModalIndex] || []}
           primaryGuest={primaryGuest}
-          onClose={() => setGuestModalOpen(false)}
+          onClose={() => setGuestModalIndex(null)}
           onSave={saveGuests}
         />
       )}

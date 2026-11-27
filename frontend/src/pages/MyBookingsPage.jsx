@@ -21,87 +21,8 @@ import {
 import { FaHotel } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
 import ToastNotification from '../components/ToastNotification';
-
-const sampleBookings = [
-  {
-    bookingCode: 'BK-2026-9821',
-    status: 'Đã xác nhận',
-    paymentStatus: '✓ Đã cọc 30%',
-    dateText: '25/10/2026 (14:00) - 27/10/2026 (12:00)',
-    nights: 2,
-    guests: 4,
-    promotionCode: 'SUMMER2026',
-    extraText: null,
-    roomTotal: 810000,
-    total: 729000,
-    deposit: 218700,
-    remaining: 510300,
-    contact: { name: 'Nguyễn Minh Anh', phone: '0912 839 221', email: 'minhanh.nguyen@email.com' },
-    rooms: [
-      { number: 'P101', typeName: 'Phòng loại A (Tiêu chuẩn)', guests: 2, guestType: 'Nội địa', amount: 300000 },
-      { number: 'P201', typeName: 'Phòng loại B (Nâng cao)', guests: 2, guestType: 'Có khách nước ngoài ×1.5', amount: 510000 },
-    ],
-  },
-  {
-    bookingCode: 'BK-2026-7734',
-    status: 'Chờ thanh toán cọc',
-    paymentStatus: null,
-    dateText: '02/11/2026 - 05/11/2026',
-    nights: 3,
-    guests: 3,
-    promotionCode: null,
-    extraText: '+25% phụ thu',
-    roomTotal: 750000,
-    total: 750000,
-    deposit: 225000,
-    remaining: 525000,
-    contact: { name: 'Nguyễn Minh Anh', phone: '0912 839 221', email: 'minhanh.nguyen@email.com' },
-    rooms: [
-      { number: 'P102', typeName: 'Phòng loại A (Tiêu chuẩn)', guests: 2, guestType: 'Nội địa', amount: 450000 },
-      { number: 'P301', typeName: 'Phòng loại C (Phòng gia đình)', guests: 1, guestType: 'Nội địa', amount: 300000 },
-    ],
-  },
-  {
-    bookingCode: 'BK-2026-6190',
-    status: 'Đang lưu trú',
-    paymentStatus: null,
-    dateText: '17/11/2026 - 19/11/2026',
-    nights: 2,
-    guests: 2,
-    promotionCode: null,
-    extraText: 'Đã phát sinh 2 dịch vụ',
-    roomTotal: 300000,
-    total: 500000,
-    deposit: 300000,
-    remaining: 200000,
-    contact: { name: 'Nguyễn Minh Anh', phone: '0912 839 221', email: 'minhanh.nguyen@email.com' },
-    rooms: [
-      { number: 'P103', typeName: 'Phòng loại A (Tiêu chuẩn)', guests: 2, guestType: 'Nội địa', amount: 300000 },
-    ],
-    services: [
-      { name: 'Ăn sáng phòng', amount: 120000 },
-      { name: 'Giặt là', amount: 80000 },
-    ],
-  },
-  {
-    bookingCode: 'BK-2026-4512',
-    status: 'Đã hoàn tất',
-    paymentStatus: '✓ Đã thanh toán đủ',
-    dateText: '15/09/2026 - 17/09/2026',
-    nights: 2,
-    guests: 2,
-    promotionCode: null,
-    extraText: null,
-    roomTotal: 490000,
-    total: 490000,
-    deposit: 490000,
-    remaining: 0,
-    contact: { name: 'Nguyễn Minh Anh', phone: '0912 839 221', email: 'minhanh.nguyen@email.com' },
-    rooms: [
-      { number: 'P104', typeName: 'Phòng loại A (Tiêu chuẩn)', guests: 2, guestType: 'Nội địa', amount: 490000 },
-    ],
-  },
-];
+import bookingService from '../services/bookingService';
+import { apiDateToInput, bookingCode, nightsBetween } from '../utils/bookingMapper';
 
 function getCustomer() {
   for (const key of ['customerUser', 'user']) {
@@ -117,31 +38,66 @@ function getCustomer() {
   return null;
 }
 
-function readBookings() {
-  let stored = [];
-  try {
-    const value = JSON.parse(localStorage.getItem('customerBookings') || '[]');
-    if (Array.isArray(value)) stored = value;
-  } catch (error) {
-    console.error('Không thể đọc danh sách customerBookings.', error);
-  }
+const CUSTOMER_STATUS = {
+  Pending: 'Chờ thanh toán cọc',
+  Confirmed: 'Đã xác nhận',
+  CheckedIn: 'Đang lưu trú',
+  Completed: 'Đã hoàn tất',
+  Cancelled: 'Đã hủy',
+};
 
-  const storedByCode = new Map(
-    stored
-      .map((item) => [item.bookingCode || item.code, item])
-      .filter(([code]) => Boolean(code)),
-  );
 
-  const samples = sampleBookings.map((sample) => {
-    const saved = storedByCode.get(sample.bookingCode);
-    return saved ? { ...sample, ...saved, bookingCode: sample.bookingCode } : sample;
-  });
-  const knownCodes = new Set(sampleBookings.map((item) => item.bookingCode));
-  const newBookings = stored
-    .map((item) => ({ ...item, bookingCode: item.bookingCode || item.code }))
-    .filter((item) => item.bookingCode && !knownCodes.has(item.bookingCode));
+const MIN_DEPOSIT_RATE = 0.3;
 
-  return [...newBookings, ...samples];
+const formatDay = (input) => {
+  const [year, month, day] = input.split('-');
+  return `${day}/${month}/${year}`;
+};
+
+
+function mapMyBooking(detail, customer) {
+  const checkIn = apiDateToInput(detail.ExpectedCheckIn);
+  const checkOut = apiDateToInput(detail.ExpectedCheckOut);
+  const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 1;
+  const rooms = (detail.Rooms || []).map((room) => ({
+    number: `P${room.RoomNumber}`,
+    typeName: room.TypeName,
+    guests: room.GuestCount,
+    guestType: room.HasForeigner ? 'Có khách nước ngoài x1.5' : 'Nội địa',
+    amount: Math.round(Number(room.SubTotal) || 0),
+  }));
+  const roomTotal = rooms.reduce((sum, room) => sum + room.amount, 0);
+  const deposit = Math.round(Number(detail.Deposit) || 0);
+  const needed = Math.ceil(roomTotal * MIN_DEPOSIT_RATE);
+  const isPending = detail.Status === 'Pending';
+  const isCompleted = detail.Status === 'Completed';
+  const paidPercent = roomTotal > 0 ? Math.round((deposit / roomTotal) * 100) : 0;
+
+  let paymentStatus = null;
+  if (detail.Status === 'Confirmed') paymentStatus = `✓ Đã cọc ${paidPercent}%`;
+  if (isCompleted) paymentStatus = '✓ Đã thanh toán đủ';
+
+  return {
+    id: detail.BookingID,
+    bookingCode: bookingCode(detail),
+    status: CUSTOMER_STATUS[detail.Status] || detail.Status,
+    paymentStatus,
+    dateText: `${formatDay(checkIn)} - ${formatDay(checkOut)}`,
+    nights,
+    guests: rooms.reduce((sum, room) => sum + Number(room.guests || 0), 0),
+    promotionCode: null,
+    extraText: null,
+    roomTotal,
+    total: roomTotal,
+    deposit: isPending ? needed : deposit,
+    remaining: isCompleted ? 0 : Math.max(roomTotal - (isPending ? needed : deposit), 0),
+    contact: {
+      name: detail.GuestName,
+      phone: detail.GuestPhone,
+      email: customer?.email || '',
+    },
+    rooms,
+  };
 }
 
 const formatPrice = (amount) => `${Number(amount).toLocaleString('vi-VN')} đ`;
@@ -149,13 +105,20 @@ const formatPrice = (amount) => `${Number(amount).toLocaleString('vi-VN')} đ`;
 function MyBookingsPage() {
   const navigate = useNavigate();
   const [customer, setCustomer] = useState(getCustomer);
-  const [bookings, setBookings] = useState(readBookings);
-  const [expandedId, setExpandedId] = useState('BK-2026-9821');
+  const [rawBookings, setRawBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Tất cả');
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const accountRef = useRef(null);
+
+  const bookings = useMemo(
+    () => rawBookings.map((detail) => mapMyBooking(detail, customer)),
+    [rawBookings, customer],
+  );
 
   const customerName = customer?.name || customer?.fullName || customer?.username || 'Nguyễn Minh Anh';
   const customerInitials = customerName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi');
@@ -181,7 +144,38 @@ function MyBookingsPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await bookingService.getMyBookings();
+        const details = await Promise.all(
+          res.data.map(async (item) => (await bookingService.getBookingById(item.BookingID)).data),
+        );
+        if (!cancelled) setRawBookings(details);
+      } catch (error) {
+        if (cancelled) return;
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          navigate('/login?redirect=/my-bookings');
+        } else {
+          setToast({
+            message: error.response?.data?.message || 'Không thể tải danh sách đặt phòng.',
+            type: 'error',
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, reloadKey]);
+
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     localStorage.removeItem('customerUser');
     setCustomer(null);
     setAccountMenuOpen(false);
@@ -203,7 +197,7 @@ function MyBookingsPage() {
     { title: 'TẤT CẢ ĐẶT PHÒNG', value: bookings.length, unit: 'phiếu', note: 'Hồ sơ tài khoản', color: '#075A9C' },
     { title: 'ĐÃ XÁC NHẬN / SẮP ĐẾN', value: bookings.filter((item) => item.status === 'Đã xác nhận').length, unit: 'phiếu', note: 'Đã hoàn tất đặt cọc 30%', color: '#2E8B57' },
     { title: 'ĐANG LƯU TRÚ', value: bookings.filter((item) => item.status === 'Đang lưu trú').length, unit: 'phiếu', note: 'Đã nhận phòng tại quầy', color: '#0D8BEA' },
-    { title: 'CHỜ CỌC & HOÀN TẤT', value: bookings.filter((item) => ['Chờ thanh toán cọc', 'Đã hoàn tất'].includes(item.status)).length, unit: 'phiếu', note: '1 chờ cọc • 1 đã hoàn tất', color: '#D97706' },
+    { title: 'CHỜ CỌC & HOÀN TẤT', value: bookings.filter((item) => ['Chờ thanh toán cọc', 'Đã hoàn tất'].includes(item.status)).length, unit: 'phiếu', note: `${bookings.filter((item) => item.status === 'Chờ thanh toán cọc').length} chờ cọc • ${bookings.filter((item) => item.status === 'Đã hoàn tất').length} đã hoàn tất`, color: '#D97706' },
   ], [bookings]);
 
   const resetFilters = () => {
@@ -211,22 +205,19 @@ function MyBookingsPage() {
     setStatusFilter('Tất cả');
   };
 
-  const persistBookings = (next) => {
-    setBookings(next);
-    try {
-      localStorage.setItem('customerBookings', JSON.stringify(next));
-    } catch (error) {
-      console.error('Không thể lưu danh sách đặt phòng.', error);
-    }
-  };
-
-  const cancelBooking = (booking) => {
+  const cancelBooking = async (booking) => {
     if (!window.confirm(`Xác nhận hủy đặt phòng ${booking.bookingCode}?`)) return;
-    persistBookings(bookings.map((item) => item.bookingCode === booking.bookingCode
-      ? { ...item, status: 'Đã hủy', paymentStatus: null }
-      : item));
-    setExpandedId(null);
-    setToast({ message: `Đã hủy đặt phòng ${booking.bookingCode}.`, type: 'success' });
+    try {
+      await bookingService.cancelBooking(booking.id);
+      setExpandedId(null);
+      setReloadKey((key) => key + 1);
+      setToast({ message: `Đã hủy đặt phòng ${booking.bookingCode}.`, type: 'success' });
+    } catch (error) {
+      setToast({
+        message: error.response?.data?.message || 'Không thể hủy đặt phòng, vui lòng thử lại.',
+        type: 'error',
+      });
+    }
   };
 
   const printBooking = (bookingCode) => {
@@ -311,17 +302,17 @@ function MyBookingsPage() {
           <section aria-label="Danh sách phiếu đặt phòng" className="flex flex-col gap-4">
             {filteredBookings.map((booking) => (
               <BookingCard
-                key={booking.bookingCode}
+                key={booking.id}
                 booking={booking}
-                expanded={expandedId === booking.bookingCode}
-                onToggle={() => setExpandedId((current) => current === booking.bookingCode ? null : booking.bookingCode)}
+                expanded={expandedId === booking.id}
+                onToggle={() => setExpandedId((current) => current === booking.id ? null : booking.id)}
                 onCancel={() => cancelBooking(booking)}
                 onPrint={() => printBooking(booking.bookingCode)}
                 navigate={navigate}
               />
             ))}
             {filteredBookings.length === 0 && (
-              <div className="rounded-xl border border-[#DCECF8] bg-white p-6 text-center text-[14px] text-[#526575]">Không tìm thấy phiếu đặt phòng phù hợp.</div>
+              <div className="rounded-xl border border-[#DCECF8] bg-white p-6 text-center text-[14px] text-[#526575]">{loading ? 'Đang tải danh sách đặt phòng...' : 'Không tìm thấy phiếu đặt phòng phù hợp.'}</div>
             )}
           </section>
         </div>
@@ -447,7 +438,7 @@ function BookingCard({ booking, expanded, onToggle, onCancel, onPrint, navigate 
               {expanded ? <FiChevronUp aria-hidden="true" className="h-4 w-4" /> : <FiChevronDown aria-hidden="true" className="h-4 w-4" />}
             </button>
             {isPending && (
-              <button type="button" onClick={() => navigate('/booking-confirm')} className="rounded-lg bg-[#0D8BEA] px-3 py-2 text-[12px] leading-normal font-bold text-white">Thanh toán cọc ngay</button>
+              <span className="text-[12px] leading-normal text-[#D97706]">Đặt cọc để giữ phòng, lễ tân sẽ xác nhận sau khi nhận cọc</span>
             )}
           </div>
         </div>
